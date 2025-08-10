@@ -1,9 +1,0 @@
-{
-  "name": "cresta-trainer-live",
-  "version": "1.0.0",
-  "private": true,
-  "type": "module",
-  "dependencies": {
-    "openai": "^4.52.0"
-  }
-}
