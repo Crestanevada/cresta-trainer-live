@@ -1,21 +1,28 @@
-<!doctype html>
-<meta charset="utf-8">
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
 <title>CrestaTrainer • Demo</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
 <style>
-  body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; margin: 0; background: #f5f5f5; }
+  body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; margin:0; background:#f5f5f5; }
   header { background:#cc0000; color:#fff; padding:16px 20px; font-weight:700; }
   #wrap { max-width:900px; margin:20px auto; background:#fff; border-radius:12px; padding:20px; box-shadow:0 10px 20px rgba(0,0,0,.06); }
   #top { display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; }
   #timer { font-weight:700; }
-  #chat { border:1px solid #e0e0e0; border-radius:10px; padding:12px; height:420px; overflow:auto; background:#fafafa; }
-  .b { margin:8px 0; padding:10px 12px; border-radius:10px; max-width:70%; white-space:pre-wrap; }
-  .cli { background:#eee; color:#212121; }
-  .ven { background:#cc0000; color:#fff; margin-left:auto; }
+  #chat { border:1px solid #e0e0e0; border-radius:10px; padding:12px; height:420px; overflow:auto; background:#fafafa; display:flex; flex-direction:column; }
+  .b { margin:8px 0; padding:10px 12px; border-radius:10px; max-width:75%; white-space:pre-wrap; line-height:1.35; }
+  .cli { background:#eee; color:#212121; align-self:flex-start; }
+  .ven { background:#cc0000; color:#fff; margin-left:auto; align-self:flex-end; }
   #bar { display:flex; gap:8px; margin-top:12px; }
   #input { flex:1; padding:10px; border-radius:8px; border:1px solid #ddd; }
   button { background:#2ecc71; color:#fff; border:0; border-radius:8px; padding:10px 16px; font-weight:700; cursor:pointer; }
+  button:disabled{ opacity:.6; cursor:not-allowed; }
   pre { background:#111; color:#0f0; padding:12px; border-radius:8px; overflow:auto; }
+  a { color:#0a59ff; text-decoration:underline; }
 </style>
+</head>
+<body>
 
 <header>CrestaTrainer • Demo</header>
 <div id="wrap">
@@ -23,23 +30,38 @@
     <div><strong>Nivel:</strong> Medio</div>
     <div id="timer">10:00</div>
   </div>
+
   <div id="chat"></div>
+
   <div id="bar">
     <textarea id="input" rows="2" placeholder="Escribe tu respuesta..."></textarea>
     <button id="send">Enviar</button>
     <button id="finish">Finalizar</button>
   </div>
+
   <div id="result"></div>
 </div>
 
+<!-- ===== STOCK EMBEBIDO (edítalo aquí) =====
+Formato por línea: título | precio | cuota/mes | URL
+Puedes añadir o quitar líneas. No uses tuberías (|) dentro de los textos. -->
+<script type="application/json" id="stock">
+BMW X3 2.0d 190cv xDrive • 2021 | 35.900€ | 459 €/mes | https://www.crestanevada.es/
+Audi A3 Sportback 30 TFSI • 2020 | 22.900€ | 319 €/mes | https://www.crestanevada.es/
+SEAT León 1.5 TSI Style • 2019 | 18.500€ | 279 €/mes | https://www.crestanevada.es/
+Toyota C-HR 1.8 Hybrid • 2018 | 20.900€ | 299 €/mes | https://www.crestanevada.es/
+Volkswagen Golf 1.0 TSI • 2020 | 19.900€ | 289 €/mes | https://www.crestanevada.es/
+</script>
+
 <script>
+/* =================== ESTADO =================== */
 let history = [];
 let transcript = [];
-let deadline = Date.now() + 10*60*1000; // 10 minutos
+let deadline = Date.now() + 10*60*1000;  // 10 minutos
 let locked = false;
 let chosenCar = null;
 
-// ===== utilidades para links seguros =====
+/* =================== UTILES =================== */
 function escapeHtml(s){
   return s.replace(/&/g,"&amp;")
           .replace(/</g,"&lt;")
@@ -52,43 +74,37 @@ function linkifySafe(s){
   return esc.replace(/https?:\/\/[^\s<]+/g, (u)=>`<a href="${u}" target="_blank" rel="noopener">${u}</a>`);
 }
 
-// ===== temporizador =====
+/* =================== UI =================== */
 function tick(){
   const s = Math.max(0, Math.floor((deadline-Date.now())/1000));
   const mm = String(Math.floor(s/60)).padStart(2,'0');
   const ss = String(s%60).padStart(2,'0');
   document.getElementById('timer').textContent = `${mm}:${ss}`;
-  if(s<=0 && !locked) finish();
+  if (s<=0 && !locked) finish();
 }
-setInterval(tick,500);
+setInterval(tick, 500);
 
-// ===== burbujas =====
 function bubble(role, text){
   const div = document.createElement('div');
-  div.className = 'b ' + (role==="cliente" ? "cli":"ven");
-  if(role==="cliente"){ // cliente: permite links seguros
+  div.className = 'b ' + (role === "cliente" ? "cli" : "ven");
+  if (role === "cliente"){
     div.innerHTML = linkifySafe(text);
-    history.push({role:"assistant", content:text});
-  }else{ // vendedor: texto plano
+    history.push({ role: "assistant", content: text });
+  } else {
     div.textContent = text;
-    history.push({role:"user", content:text});
+    history.push({ role: "user", content: text });
   }
   document.getElementById('chat').appendChild(div);
   document.getElementById('chat').scrollTop = document.getElementById('chat').scrollHeight;
-  transcript.push({speaker: role, text});
+  transcript.push({ speaker: role, text });
 }
 
-// ===== cargar stock y elegir coche =====
-async function loadRandomCar(){
+/* =================== STOCK EMBEBIDO =================== */
+function loadRandomCarFromEmbedded(){
   try{
-    const r = await fetch('/stock.txt', { cache: 'no-store' });
-    if(!r.ok) throw new Error('stock.txt no disponible');
-    const txt = await r.text();
-
-    const lines = txt.split('\n').map(l=>l.trim()).filter(Boolean);
-    if(!lines.length) throw new Error('stock vacío');
-
-    const pick = lines[Math.floor(Math.random()*lines.length)];
+    const raw = document.getElementById('stock').textContent;
+    const lines = raw.split('\n').map(l => l.trim()).filter(Boolean);
+    const pick = lines[Math.floor(Math.random() * lines.length)];
     const cols = pick.split('|').map(x => (x ?? '').trim());
 
     const title   = cols[0] || '';
@@ -98,52 +114,51 @@ async function loadRandomCar(){
 
     chosenCar = { title, price, monthly, url };
 
-    let first = 'Hola, estaba mirando este coche:\n';
-    if (title) first += title + '\n';
-    if (price || monthly) first += (price || '') + (monthly ? (' • ' + monthly) : '') + '\n';
-    if (url) first += url;
+    const parts = [];
+    if (title) parts.push(title);
+    if (price || monthly) parts.push((price || '') + (monthly ? ' • ' + monthly : ''));
+    if (url) parts.push(url);
 
-    if (first.trim() === 'Hola, estaba mirando este coche:') {
-      throw new Error('línea de stock incompleta');
-    }
+    if (!parts.length) throw new Error('stock mal formateado');
 
+    const first = "Hola, estaba mirando este coche:\n" + parts.join("\n");
     bubble("cliente", first);
-
-  } catch(e){
-    console.warn('Stock falló o incompleto, usando fallback:', e?.message || e);
-    chosenCar = { title: "SUV gasolina con dudas de consumo", price: "", monthly: "", url: "" };
+  }catch(e){
+    console.warn('Stock embebido inválido, usando fallback:', e?.message || e);
+    chosenCar = { title:"SUV gasolina con dudas de consumo", price:"", monthly:"", url:"" };
     bubble("cliente","Hola, vi un coche en vuestra web y me gustaría saber si lo puedo ver en esta tienda o traerlo para probarlo.");
   }
 }
 
-// ===== simular cliente (IA) =====
+/* =================== IA (simulación cliente) =================== */
 async function simulate(){
-  const r = await fetch('/api/simulate',{
-    method:'POST',
-    headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({ history, car: chosenCar, nivel:"MEDIO" })
+  const r = await fetch('/api/simulate', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ history, car: chosenCar, nivel: "MEDIO" })
   });
-  const data = await r.json();
+  const data = await r.json().catch(()=>({}));
   bubble("cliente", data.reply || "¿Podrías repetirme? No he recibido respuesta.");
 }
 
-// ===== finalizar y evaluar =====
+/* =================== Finalizar y evaluar =================== */
 async function finish(){
   locked = true;
   document.getElementById('send').disabled = true;
   document.getElementById('finish').disabled = true;
-  const r = await fetch('/api/evaluate',{
-    method:'POST',
-    headers:{'Content-Type':'application/json'},
+
+  const r = await fetch('/api/evaluate', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ transcript, car: chosenCar })
   });
-  const data = await r.text();
+  const data = await r.text().catch(()=> 'No se pudo generar la evaluación.');
   const pre = document.createElement('pre');
   pre.textContent = data;
   document.getElementById('result').appendChild(pre);
 }
 
-// ===== eventos UI =====
+/* =================== Eventos UI =================== */
 document.getElementById('send').onclick = async ()=>{
   const v = document.getElementById('input').value.trim();
   if(!v) return;
@@ -153,6 +168,9 @@ document.getElementById('send').onclick = async ()=>{
 };
 document.getElementById('finish').onclick = finish;
 
-// ===== arranque =====
-loadRandomCar();
+/* =================== Arranque =================== */
+loadRandomCarFromEmbedded();
 </script>
+
+</body>
+</html>
