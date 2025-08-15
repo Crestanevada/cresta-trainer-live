@@ -1,166 +1,291 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>CrestaTrainer • Demo</title>
   <style>
-    body {
-      font-family: Arial, sans-serif;
-      background-color: #f5f5f5;
-      margin: 0;
-      padding: 0;
+    :root{
+      --brand:#cc0000;
+      --green:#2ecc71;
+      --amber:#ffab00;
+      --ink:#111;
+      --bg:#f5f5f5;
+      --panel:#fff;
+      --soft:#f3f3f3;
+      --border:#e6e6e6;
     }
-    header {
-      background-color: #d50000;
-      color: white;
-      padding: 10px;
-      display: flex;
-      align-items: center;
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{
+      margin:0;
+      background:var(--bg);
+      color:#222;
+      font:16px/1.4 system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;
+      display:flex;
+      flex-direction:column;
     }
-    header span {
-      margin-right: 10px;
-      background-color: black;
-      color: white;
-      padding: 4px 8px;
-      border-radius: 4px;
-      font-weight: bold;
-      font-size: 0.9em;
+    /* --- Header corporativo --- */
+    header{
+      background:var(--brand);
+      color:#fff;
+      padding:10px 16px;
+      display:flex;
+      align-items:center;
+      gap:12px;
     }
-    .chat-container {
-      max-width: 900px;
-      margin: 20px auto;
-      background-color: white;
-      border-radius: 8px;
-      padding: 20px;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    .badge{
+      background:#000;
+      color:#fff;
+      font-weight:700;
+      border-radius:999px;
+      padding:4px 10px;
+      font-size:12px;
     }
-    .bubble {
-      padding: 10px;
-      border-radius: 8px;
-      margin-bottom: 10px;
-      white-space: pre-line;
+    .user{
+      font-weight:600;
+      opacity:.95;
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
     }
-    .bubble.cliente {
-      background-color: #f0f0f0;
-      align-self: flex-start;
+
+    /* --- Contenedor principal --- */
+    #wrap{
+      width:min(980px, 100%);
+      margin:16px auto;
+      padding:0 12px;
+      flex:1;
+      display:flex;
+      flex-direction:column;
+      gap:12px;
     }
-    .bubble.vendedor {
-      background-color: #d50000;
-      color: white;
-      align-self: flex-end;
+    /* Tarjeta chat */
+    #card{
+      background:var(--panel);
+      border:1px solid var(--border);
+      border-radius:12px;
+      padding:14px;
+      box-shadow:0 6px 14px rgba(0,0,0,.06);
+      display:flex;
+      flex-direction:column;
+      gap:12px;
+      min-height:360px;       /* altura cómoda */
     }
-    .input-area {
-      display: flex;
-      margin-top: 10px;
+    /* Área de mensajes scrollable sin comerse toda la página */
+    #chat{
+      background:var(--soft);
+      border:1px solid var(--border);
+      border-radius:10px;
+      padding:12px;
+      height:360px;           /* fija y razonable: evita “página interminable” */
+      overflow:auto;
     }
-    .input-area input {
-      flex: 1;
-      padding: 10px;
-      border-radius: 4px;
-      border: 1px solid #ccc;
+    .b{margin:8px 0; padding:10px 12px; border-radius:10px; max-width:75%; white-space:pre-wrap}
+    .cli{background:#eee; color:#212121}
+    .ven{background:var(--brand); color:#fff; margin-left:auto}
+
+    /* Barra de entrada */
+    #bar{display:flex; gap:8px}
+    #input{
+      flex:1;
+      padding:10px;
+      border-radius:8px;
+      border:1px solid var(--border);
+      background:#fff;
     }
-    .input-area button {
-      padding: 10px 15px;
-      margin-left: 5px;
-      border: none;
-      border-radius: 4px;
-      cursor: pointer;
-      font-weight: bold;
+    button{
+      border:0; border-radius:8px; padding:10px 16px; font-weight:700; cursor:pointer;
     }
-    .btn-enviar {
-      background-color: #00c853;
-      color: white;
-    }
-    .btn-finalizar {
-      background-color: #ffab00;
-      color: white;
+    .ok{background:var(--green); color:#fff}
+    .end{background:var(--amber); color:#fff}
+
+    /* Pie de resultados */
+    #result pre{
+      margin:0; background:#111; color:#0f0; padding:12px; border-radius:8px; overflow:auto
     }
   </style>
 </head>
 <body>
   <header>
-    <span id="modo">Modo: FÁCIL</span>
-    <div id="usuario">ruben.perrone@crestanebada.es</div>
+    <span class="badge" id="mode-badge">Modo: FÁCIL</span>
+    <div class="user" id="user-mail">—</div>
   </header>
 
-  <div class="chat-container" id="chat"></div>
-
-  <div class="input-area">
-    <input type="text" id="input" placeholder="Escribe tu respuesta..." />
-    <button class="btn-enviar" onclick="enviar()">Enviar</button>
-    <button class="btn-finalizar" onclick="finalizar()">Finalizar</button>
-  </div>
+  <main id="wrap">
+    <div id="card">
+      <div id="chat"></div>
+      <div id="bar">
+        <input id="input" placeholder="Escribe tu respuesta…" />
+        <button class="ok" id="send">Enviar</button>
+        <button class="end" id="finish">Finalizar</button>
+      </div>
+      <div id="result"></div>
+    </div>
+  </main>
 
   <script>
-    let chosenCar = null;
+    /* =========================
+       Estado
+    ========================== */
+    let history = [];
+    let transcript = [];
+    let chosenCar = null;              // {title, price, monthly}
+    const MODE = 'FÁCIL';              // solo mostramos el modo (no se elige)
+    document.getElementById('mode-badge').textContent = 'Modo: ' + MODE;
 
-    function bubble(tipo, texto) {
-      const chat = document.getElementById("chat");
-      const div = document.createElement("div");
-      div.classList.add("bubble", tipo);
-      div.textContent = texto;
-      chat.appendChild(div);
-      chat.scrollTop = chat.scrollHeight;
+    // Email (si no existe, lo pedimos 1 vez y lo guardamos)
+    (function ensureEmail(){
+      let m = localStorage.getItem('trainerEmail') || '';
+      if(!m){
+        m = prompt('Introduce tu email corporativo para registrar este role-play:', '') || '';
+        if(m) localStorage.setItem('trainerEmail', m);
+      }
+      document.getElementById('user-mail').textContent = m || '—';
+    })();
+
+    /* =========================
+       Utilidades de UI
+    ========================== */
+    function bubble(role, text){
+      const div = document.createElement('div');
+      div.className = 'b ' + (role === 'cliente' ? 'cli' : 'ven');
+      div.textContent = text;
+      document.getElementById('chat').appendChild(div);
+      document.getElementById('chat').scrollTop = document.getElementById('chat').scrollHeight;
+      transcript.push({ speaker: role, text });
+      // Para la IA: mapeamos vendedor->user, cliente->assistant
+      if(role === 'vendedor'){ history.push({ role: 'user', content: text }); }
+      else { history.push({ role: 'assistant', content: text }); }
     }
 
-    async function pickRandomCarFromStock(){
-      try{
-        const r = await fetch("/stock.txt", { cache:"no-store" });
-        if(!r.ok) throw new Error("stock.txt no disponible");
-        const txt = await r.text();
+    /* =========================
+       Lectura de stock
+       Formato recomendado: "Título|Precio|Cuota"
+       (La URL se omite a propósito por tu petición de “sin enlaces”.)
+    ========================== */
+    async function loadRandomCar(){
+      const fallbackStock = [
+        'BMW Serie 1 118d 2019|18.500€|289€/mes',
+        'SEAT León 1.5 TSI 2020|17.900€|265€/mes',
+        'Volkswagen Golf 1.0 TSI 2021|19.300€|299€/mes',
+        'Audi A3 30 TDI 2019|20.400€|315€/mes',
+        'Nissan Qashqai 1.3 DIG-T 2020|21.200€|329€/mes',
+        'KIA Sportage 1.6 GDi 2018|15.800€|239€/mes'
+      ];
 
-        // Filtrar líneas no válidas (CSS, JS, HTML, enlaces, etc.)
-        const linesRaw = txt.split("\n").map(s=>s.trim()).filter(Boolean);
-        const isLikelyCarLine = (l)=>{
-          if(!l) return false;
-          if (l.startsWith("#") || l.startsWith("//")) return false;
-          if (/[{}<>]|<\/?|\bfunction\b|\bconst\b|https?:\/\//i.test(l)) return false;
-          const hasWords = /[A-Za-zÁÉÍÓÚÜÑáéíóúüñ]/.test(l);
-          const hasPriceOrYear = /€|\b(20\d{2}|19\d{2})\b/.test(l);
-          return hasWords && hasPriceOrYear;
-        };
-        const lines = linesRaw.filter(isLikelyCarLine);
-        if(!lines.length) throw new Error("stock sin líneas válidas");
+      try{
+        const r = await fetch('/stock.txt', { cache:'no-store' });
+        let lines = [];
+        if(r.ok){
+          const txt = await r.text();
+          const raw = txt.split('\n').map(s => s.trim()).filter(Boolean);
+          // Filtramos basura (css/js/html/enlaces)
+          const safe = raw.filter(l =>
+            !/[{}<>]|<\/?|\bfunction\b|\bconst\b|https?:\/\//i.test(l)
+          );
+          // Aceptamos solo líneas con 1–3 columnas separadas por |
+          lines = safe
+            .map(l => l.split('|').map(x => (x||'').trim()))
+            .filter(cols => cols.length >= 1 && cols.length <= 3 && /[A-Za-zÁÉÍÓÚÜÑáéíóúüñ]/.test(cols[0]));
+          // Recompone a string “a|b|c” para aleatorio
+          lines = lines.map(cols => cols.join('|'));
+        }
+
+        if(!lines.length) lines = fallbackStock;
 
         const pick = lines[Math.floor(Math.random()*lines.length)];
-        const parts = pick.split("|").map(s=>(s||"").trim());
-        const title   = parts[0] || "";
-        const price   = parts[1] || "";
-        const monthly = parts[2] || "";
+        const cols = pick.split('|').map(x => x.trim());
+        const title   = cols[0] || '';
+        const price   = cols[1] || '';
+        const monthly = cols[2] || '';
 
         chosenCar = { title, price, monthly };
 
-        const msg = [
-          "Hola, estaba mirando este coche:",
-          title ? title : "",
-          (price || monthly) ? [price, monthly].filter(Boolean).join(" • ") : "",
-          "¿Podrías confirmarme si está disponible para verlo esta semana?"
-        ].filter(Boolean).join("\n");
+        const parts = ['Hola, estaba mirando este coche:'];
+        if(title)   parts.push(title);
+        if(price || monthly) parts.push([price, monthly].filter(Boolean).join(' • '));
+        parts.push('¿Podrías confirmarme si está disponible para verlo esta semana?');
 
-        bubble("cliente", msg);
+        bubble('cliente', parts.join('\n'));
       }catch(err){
-        console.warn("Fallo stock:", err?.message || err);
-        chosenCar = { title:"SUV gasolina", price:"", monthly:"" };
-        bubble("cliente",
-          "Hola, estaba mirando un SUV gasolina que vi en vuestra web. ¿Podrías confirmarme si está disponible para verlo esta semana?");
+        console.warn('Stock falló:', err);
+        chosenCar = { title:'SUV gasolina', price:'', monthly:'' };
+        bubble('cliente','Hola, estaba mirando un SUV gasolina que vi en vuestra web. ¿Podrías confirmarme si está disponible para verlo esta semana?');
       }
     }
 
-    function enviar(){
-      const input = document.getElementById("input");
-      if(input.value.trim()){
-        bubble("vendedor", input.value.trim());
-        input.value = "";
+    /* =========================
+       Simulación (tu backend /api/simulate)
+    ========================== */
+    async function simulate(){
+      try{
+        const r = await fetch('/api/simulate', {
+          method:'POST',
+          headers:{ 'Content-Type':'application/json' },
+          body: JSON.stringify({
+            history,
+            car: chosenCar,
+            nivel: MODE
+          })
+        });
+        const data = await r.json().catch(()=>({}));
+        const text = (data && data.reply) ? data.reply : '¿Podrías repetirme?';
+        bubble('cliente', text);
+      }catch(e){
+        bubble('cliente','(hubo un problema temporal, intenta otra vez)');
       }
     }
 
-    function finalizar(){
-      alert("Role play finalizado");
+    /* =========================
+       Evaluación (tu backend /api/evaluate)
+    ========================== */
+    async function finish(){
+      try{
+        // Marca de tiempo: duración del role-play
+        if(!window.__startTs) window.__startTs = Date.now();
+        const durationSec = Math.max(1, Math.floor((Date.now() - window.__startTs) / 1000));
+
+        const r = await fetch('/api/evaluate', {
+          method:'POST',
+          headers:{ 'Content-Type':'application/json' },
+          body: JSON.stringify({
+            transcript,
+            car: chosenCar,
+            mode: MODE,
+            email: localStorage.getItem('trainerEmail') || '',
+            duration_sec: durationSec
+          })
+        });
+        const data = await r.text();
+        const pre = document.createElement('pre');
+        pre.textContent = data;
+        document.getElementById('result').innerHTML = '';
+        document.getElementById('result').appendChild(pre);
+      }catch(e){
+        const pre = document.createElement('pre');
+        pre.textContent = 'Error al evaluar: ' + (e?.message || e);
+        document.getElementById('result').innerHTML = '';
+        document.getElementById('result').appendChild(pre);
+      }
     }
 
-    // Lanzar la primera interacción
-    pickRandomCarFromStock();
+    /* =========================
+       Eventos
+    ========================== */
+    document.getElementById('send').onclick = async ()=>{
+      const el = document.getElementById('input');
+      const v = el.value.trim();
+      if(!v) return;
+      el.value = '';
+      bubble('vendedor', v);
+      await simulate();
+    };
+    document.getElementById('finish').onclick = finish;
+
+    // Arranque + cronómetro de la sesión
+    window.__startTs = Date.now();
+    loadRandomCar();
   </script>
 </body>
 </html>
