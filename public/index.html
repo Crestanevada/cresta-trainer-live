@@ -1,198 +1,204 @@
 <!doctype html>
-<html lang="es">
-<meta charset="utf-8"/>
-<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<meta charset="utf-8">
 <title>CrestaTrainer • Demo</title>
 <style>
-  :root { --brand:#cc0000; --ok:#2ecc71; --bg:#f5f5f5; }
-  * { box-sizing: border-box; }
-  body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; margin:0; background:var(--bg); }
-  header { background:var(--brand); color:#fff; padding:14px 18px; font-weight:700; }
-  #wrap { max-width:900px; margin:18px auto; background:#fff; border-radius:12px; padding:18px; box-shadow:0 10px 20px rgba(0,0,0,.06); }
-  #top { display:flex; justify-content:space-between; align-items:center; gap:12px; margin-bottom:12px; flex-wrap:wrap; }
+  body { font-family: system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif; margin:0; background:#f5f5f5; }
+  header { background:#cc0000; color:#fff; padding:16px 20px; font-weight:700; }
+  #wrap { max-width:900px; margin:20px auto; background:#fff; border-radius:12px; padding:20px; box-shadow:0 10px 20px rgba(0,0,0,.06); }
+  #top { display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; gap:12px; flex-wrap:wrap; }
+  #meta { display:flex; gap:8px; align-items:center; }
+  .pill { background:#111; color:#fff; font-size:12px; padding:4px 8px; border-radius:999px; }
+  .muted { color:#666; font-size:12px; }
   #timer { font-weight:700; }
-  #modeBadge { background:#111; color:#fff; padding:4px 8px; border-radius:999px; font-size:12px; }
-  #who { color:#666; font-size:12px; }
   #chat { border:1px solid #e0e0e0; border-radius:10px; padding:12px; height:420px; overflow:auto; background:#fafafa; }
   .b { margin:8px 0; padding:10px 12px; border-radius:10px; max-width:70%; white-space:pre-wrap; }
   .cli { background:#eee; color:#212121; }
-  .ven { background:var(--brand); color:#fff; margin-left:auto; }
+  .ven { background:#cc0000; color:#fff; margin-left:auto; }
   #bar { display:flex; gap:8px; margin-top:12px; }
   #input { flex:1; padding:10px; border-radius:8px; border:1px solid #ddd; }
-  button { background:var(--ok); color:#fff; border:0; border-radius:8px; padding:10px 16px; font-weight:700; cursor:pointer; }
-  button#finish { background:#ffc107; color:#111; }
+  button { background:#2ecc71; color:#fff; border:0; border-radius:8px; padding:10px 16px; font-weight:700; cursor:pointer; }
+  button.warn { background:#f1c40f; color:#111; }
   pre { background:#111; color:#0f0; padding:12px; border-radius:8px; overflow:auto; }
-  /* Login modal */
-  #loginModal { position:fixed; inset:0; background:rgba(0,0,0,.6); display:flex; align-items:center; justify-content:center; padding:20px; }
-  #loginCard { background:#fff; padding:20px; border-radius:12px; width:100%; max-width:420px; box-shadow:0 10px 30px rgba(0,0,0,.2); }
-  #loginCard h2 { margin:0 0 8px 0; }
-  #loginCard p { margin:0 0 14px 0; color:#555; }
-  #loginCard input { width:100%; padding:12px; border:1px solid #ddd; border-radius:8px; margin-bottom:10px; }
-  #loginCard button { width:100%; }
 </style>
-
-<body>
-  <header>CrestaTrainer • Demo</header>
-
-  <!-- Login -->
-  <div id="loginModal" style="display:none;">
-    <div id="loginCard">
-      <h2>Accede con tu email</h2>
-      <p>Usa tu email corporativo para registrar tu entrenamiento.</p>
-      <input id="emailInput" type="email" placeholder="nombre@crestanevada.es" />
-      <button id="loginBtn">Empezar</button>
-      <p id="loginErr" style="color:#c00; display:none; margin-top:8px;">Email no válido.</p>
+<header>CrestaTrainer • Demo</header>
+<div id="wrap">
+  <div id="top">
+    <div id="meta">
+      <span id="modePill" class="pill">Modo: FÁCIL</span>
+      <span id="who" class="muted">–</span>
     </div>
+    <div id="timer">10:00</div>
   </div>
-
-  <div id="wrap">
-    <div id="top">
-      <div>
-        <span id="modeBadge">Modo: …</span>
-        <span id="who"></span>
-      </div>
-      <div id="timer">10:00</div>
-    </div>
-
-    <div id="chat"></div>
-
-    <div id="bar">
-      <textarea id="input" rows="2" placeholder="Escribe tu respuesta..."></textarea>
-      <button id="send">Enviar</button>
-      <button id="finish">Finalizar</button>
-    </div>
-
-    <div id="result" style="margin-top:12px;"></div>
+  <div id="chat"></div>
+  <div id="bar">
+    <textarea id="input" rows="2" placeholder="Escribe tu respuesta..."></textarea>
+    <button id="send">Enviar</button>
+    <button id="finish" class="warn">Finalizar</button>
   </div>
+  <div id="result"></div>
+</div>
 
 <script>
-/* ===== Config ===== */
-const SESSION_MINUTES = 10; // duración por sesión
-let LEVEL = "FÁCIL";        // se auto-asignará desde /api/mode
-let sellerEmail = null;
+/* ========= CONFIG BÁSICA ========= */
+const SESSION_MINUTES = 10;            // cuenta regresiva visual
+const DEFAULT_MODE = "FÁCIL";          // modo mostrado (no seleccionable por el usuario)
 
-/* ===== Estado ===== */
-let history = [];
-let transcript = [];
+/* ========= ESTADO ========= */
+let history = [];          // para la API de simulate
+let transcript = [];       // para evaluación
+let chosenCar = null;      // coche elegido de stock.txt
+let locked = false;        // evita doble envío al finalizar
 let deadline = Date.now() + SESSION_MINUTES*60*1000;
-let locked = false;
-let chosenCar = null;
+let startTime = null;      // <<< MARCADOR DE INICIO PARA DURACIÓN
+let userEmail = null;
 
-/* ===== Util ===== */
-function escapeHtml(s){
-  return String(s||"")
-    .replace(/&/g,"&amp;").replace(/</g,"&lt;")
-    .replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#39;");
-}
-function bubble(role, text){
-  const div = document.createElement('div');
-  div.className = 'b ' + (role==="cliente" ? "cli":"ven");
-  if(role==="cliente"){ div.innerHTML = escapeHtml(text); history.push({role:"assistant", content:text}); }
-  else { div.textContent = text; history.push({role:"user", content:text}); }
-  document.getElementById('chat').appendChild(div);
-  document.getElementById('chat').scrollTop = document.getElementById('chat').scrollHeight;
-  transcript.push({speaker: role, text});
-}
+/* ========= UTILIDADES ========= */
+const $ = sel => document.querySelector(sel);
 function tick(){
   const s = Math.max(0, Math.floor((deadline-Date.now())/1000));
   const mm = String(Math.floor(s/60)).padStart(2,'0');
   const ss = String(s%60).padStart(2,'0');
-  document.getElementById('timer').textContent = `${mm}:${ss}`;
+  $("#timer").textContent = `${mm}:${ss}`;
   if(s<=0 && !locked) finish();
 }
-setInterval(tick,500);
+setInterval(tick, 500);
 
-/* ===== Inicio ===== */
-async function boot(){
-  // 1) Pide / recuerda email
-  sellerEmail = localStorage.getItem('ct_email') || null;
-  if(!sellerEmail){ document.getElementById('loginModal').style.display = 'flex'; }
-  else { await afterLogin(); }
+function bubble(role, text){
+  const div = document.createElement('div');
+  div.className = 'b ' + (role==="cliente" ? "cli" : "ven");
+  div.textContent = text;
+  $("#chat").appendChild(div);
+  $("#chat").scrollTop = $("#chat").scrollHeight;
+  transcript.push({ speaker: role, text });
+
+  // construir historial para /api/simulate
+  if (role === "vendedor") history.push({ role:"user", content:text });
+  else history.push({ role:"assistant", content:text });
 }
-document.getElementById('loginBtn').onclick = async ()=>{
-  const e = (document.getElementById('emailInput').value || "").trim();
-  if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e)){
-    document.getElementById('loginErr').style.display = 'block'; return;
-  }
-  document.getElementById('loginErr').style.display = 'none';
-  sellerEmail = e;
-  localStorage.setItem('ct_email', e);
-  document.getElementById('loginModal').style.display = 'none';
-  await afterLogin();
-};
 
-async function afterLogin(){
-  // 2) Modo automático desde /api/mode (según 3 días seguidos ≥7)
+function formatMMSS(totalSec){
+  const s = Math.max(0, Math.floor(totalSec));
+  const mm = String(Math.floor(s/60)).padStart(2,'0');
+  const ss = String(s%60).padStart(2,'0');
+  return `${mm}:${ss}`;
+}
+
+/* ========= LOGIN (solo email) ========= */
+function ensureEmail(){
+  // guardamos en localStorage para no pedirlo cada vez
+  userEmail = localStorage.getItem("ct_email") || "";
+  if(!userEmail){
+    userEmail = prompt("Introduce tu email corporativo para continuar:");
+    if(!userEmail) userEmail = "anon@local";
+    localStorage.setItem("ct_email", userEmail);
+  }
+  $("#who").textContent = userEmail;
+}
+
+/* ========= MODO (solo mostrar) ========= */
+function setModePill(modeText){
+  $("#modePill").textContent = `Modo: ${modeText}`;
+}
+
+/* ========= STOCK: cargar y elegir coche =========
+   Formato de cada línea en /public/stock.txt
+   Marca Modelo Año | Precio | Cuota | (opcional) URL (no la mostramos)
+*/
+async function loadRandomCar(){
   try{
-    const r = await fetch(`/api/mode?sellerEmail=${encodeURIComponent(sellerEmail)}`);
-    const data = await r.json();
-    LEVEL = data.level || "FÁCIL";
-  }catch{ LEVEL = "FÁCIL"; }
+    const r = await fetch('/stock.txt', { cache:'no-store' });
+    if(!r.ok) throw new Error('stock.txt no disponible');
+    const txt = await r.text();
+    const lines = txt.split('\n').map(l=>l.trim()).filter(Boolean);
+    const pick = lines[Math.floor(Math.random()*lines.length)];
+    const [title="", price="", monthly=""] = pick.split('|').map(x=>(x||"").trim());
 
-  document.getElementById('modeBadge').textContent = `Modo: ${LEVEL}`;
-  document.getElementById('who').textContent = `• ${sellerEmail}`;
+    chosenCar = { title, price, monthly };
 
-  // 3) Mensaje + coche inicial desde /api/start
-  await loadRandomCar();
+    // primer mensaje del cliente (marca INICIO)
+    const firstLines = [];
+    if (title) firstLines.push(title);
+    if (price || monthly) firstLines.push([price, monthly].filter(Boolean).join(' • '));
+    const first =
+`Hola, estaba mirando este coche:
+${firstLines.join('\n')}
+¿Podrías confirmarme si está disponible para verlo esta semana?`;
 
-  // 4) Timer
-  deadline = Date.now() + SESSION_MINUTES*60*1000;
-}
-
-/* ===== Cargar caso ===== */
-async function loadRandomCar() {
-  try {
-    const r = await fetch('/api/start');
-    const { car, first } = await r.json();
-    chosenCar = car;
     bubble("cliente", first);
-  } catch (e) {
-    chosenCar = { title: "SUV gasolina con dudas de consumo", price: "", monthly: "", url: "" };
-    bubble("cliente", "Hola, vi un coche en vuestra web y me gustaría saber si lo puedo ver en esta tienda o traerlo para probarlo.");
-    console.warn("start error:", e);
+
+    // <<< AQUÍ COMIENZA LA MEDICIÓN DEL TIEMPO DEL ROLE-PLAY >>>
+    startTime = Date.now();
+
+  }catch(e){
+    // fallback si falla stock
+    chosenCar = { title: "SUV gasolina 2019", price:"", monthly:"" };
+    bubble("cliente","Hola, estaba mirando un SUV gasolina de 2019 que vi en vuestra web. ¿Podría verlo esta semana?");
+    startTime = Date.now();
+    console.warn("Stock fallback:", e?.message || e);
   }
 }
 
-/* ===== Simulación (cliente IA) ===== */
+/* ========= SIMULAR CLIENTE (IA) ========= */
 async function simulate(){
-  const r = await fetch('/api/simulate',{
+  const payload = {
+    history,
+    car: chosenCar,
+    nivel: DEFAULT_MODE,
+    email: userEmail
+  };
+  const r = await fetch('/api/simulate', {
     method:'POST',
-    headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({ history, car: chosenCar, nivel: LEVEL })
+    headers:{ 'Content-Type':'application/json' },
+    body: JSON.stringify(payload)
   });
   const data = await r.json();
-  bubble("cliente", data.reply || "¿Podrías repetirme?");
+  bubble("cliente", data.reply || "¿Podrías aclararlo?");
 }
 
-/* ===== Finalizar ===== */
+/* ========= FINALIZAR & EVALUAR (con tiempo total) ========= */
 async function finish(){
-  if(locked) return;
+  if (locked) return;
   locked = true;
-  document.getElementById('send').disabled = true;
-  document.getElementById('finish').disabled = true;
+  $("#send").disabled = true;
+  $("#finish").disabled = true;
 
-  const r = await fetch('/api/evaluate',{
+  // duración total en segundos desde el primer mensaje del cliente
+  const durationSec = startTime ? (Date.now() - startTime)/1000 : 0;
+
+  // enviamos a tu backend de evaluación
+  const r = await fetch('/api/evaluate', {
     method:'POST',
-    headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({ transcript, car: chosenCar, nivel: LEVEL, sellerEmail })
+    headers:{ 'Content-Type':'application/json' },
+    body: JSON.stringify({
+      transcript,
+      car: chosenCar,
+      nivel: DEFAULT_MODE,
+      email: userEmail,
+      durationSec
+    })
   });
+
   const text = await r.text();
+
+  // mostramos tiempo + resultado
+  const human = formatMMSS(durationSec);
   const pre = document.createElement('pre');
-  pre.textContent = text;
-  document.getElementById('result').appendChild(pre);
+  pre.textContent = `Tiempo total del role‑play: ${human}\n\n${text}`;
+  $("#result").appendChild(pre);
 }
 
-/* ===== UI ===== */
-document.getElementById('send').onclick = async ()=>{
-  const v = document.getElementById('input').value.trim();
+/* ========= EVENTOS UI ========= */
+$("#send").onclick = async ()=>{
+  const v = $("#input").value.trim();
   if(!v) return;
-  document.getElementById('input').value = "";
+  $("#input").value = "";
   bubble("vendedor", v);
   await simulate();
 };
-document.getElementById('finish').onclick = finish;
+$("#finish").onclick = finish;
 
-boot();
+/* ========= ARRANQUE ========= */
+setModePill(DEFAULT_MODE);
+ensureEmail();
+loadRandomCar();
 </script>
-</body>
-</html>
