@@ -3,8 +3,12 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
+  "scripts": {
+    "start": "vercel dev",
+    "build": "echo \"no build step\""
+  },
   "dependencies": {
-    "openai": "^4.52.0",
-    "googleapis": "^131.0.0"
+    "googleapis": "^128.0.0",
+    "openai": "^4.56.0"
   }
 }
