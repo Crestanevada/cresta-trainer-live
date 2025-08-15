@@ -15,11 +15,13 @@
   #input { flex:1; padding:10px; border-radius:8px; border:1px solid #ddd; }
   button { background:#2ecc71; color:#fff; border:0; border-radius:8px; padding:10px 16px; font-weight:700; cursor:pointer; }
   pre { background:#111; color:#0f0; padding:12px; border-radius:8px; overflow:auto; }
+  small { color:#666 }
 </style>
+
 <header>CrestaTrainer • Demo</header>
 <div id="wrap">
   <div id="top">
-    <div><strong>Nivel:</strong> Medio</div>
+    <div><strong>Nivel:</strong> <span id="nivel">Fácil</span> <small id="emailBox"></small></div>
     <div id="timer">10:00</div>
   </div>
   <div id="chat"></div>
@@ -30,13 +32,42 @@
   </div>
   <div id="result"></div>
 </div>
+
 <script>
+/* ======= CONFIG SENCILLA ======= */
+const LEVEL = "FÁCIL";          // FÁCIL | MEDIO | DIFÍCIL | IMPOSIBLE
+const SESSION_MINUTES = 10;     // duración del role-play
+
+/* ======= Estado ======= */
 let history = [];
 let transcript = [];
-let deadline = Date.now() + 10*60*1000;
+let deadline = Date.now() + SESSION_MINUTES*60*1000;
 let locked = false;
 let chosenCar = null;
+let userEmail = null;
 
+/* ======= Email requerido (simple) ======= */
+(function askEmail(){
+  const saved = localStorage.getItem('ct_email');
+  if (saved && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(saved)) {
+    userEmail = saved;
+  } else {
+    let e = "";
+    while (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e)) {
+      e = prompt("Introduce tu email corporativo para registrar tu entrenamiento:");
+      if (e === null) break;
+    }
+    if (e) {
+      userEmail = e;
+      localStorage.setItem('ct_email', e);
+    } else {
+      userEmail = "desconocido@empresa.com";
+    }
+  }
+  document.getElementById('emailBox').textContent = `• ${userEmail}`;
+})();
+
+/* ======= utilidades para links seguros (por si hicieras enlaces en mensajes) ======= */
 function escapeHtml(s){
   return s.replace(/&/g,"&amp;")
           .replace(/</g,"&lt;")
@@ -49,15 +80,18 @@ function linkifySafe(s){
   return esc.replace(/https?:\/\/[^\s<]+/g, (u)=>`<a href="${u}" target="_blank" rel="noopener">${u}</a>`);
 }
 
+/* ======= temporizador ======= */
 function tick(){
   const s = Math.max(0, Math.floor((deadline-Date.now())/1000));
   const mm = String(Math.floor(s/60)).padStart(2,'0');
   const ss = String(s%60).padStart(2,'0');
+  document.getElementById('nivel').textContent = LEVEL[0] + LEVEL.slice(1).toLowerCase();
   document.getElementById('timer').textContent = `${mm}:${ss}`;
   if(s<=0 && !locked) finish();
 }
 setInterval(tick,500);
 
+/* ======= burbujas ======= */
 function bubble(role, text){
   const div = document.createElement('div');
   div.className = 'b ' + (role==="cliente" ? "cli":"ven");
@@ -73,72 +107,69 @@ function bubble(role, text){
   transcript.push({speaker: role, text});
 }
 
+/* ======= cargar un coche “aleatorio” del stock local (sin enlaces) ======= */
+/* Crea el archivo public/stock.txt si no existe, formato: 
+   Título|Precio|Cuota
+   Ejemplo:
+   Fiat 500X Urban 1.6|13.990€|206,04€/mes
+   BMW X1 sDrive18d|21.900€|289€/mes
+*/
 async function loadRandomCar(){
   try{
     const r = await fetch('/stock.txt', { cache: 'no-store' });
     if(!r.ok) throw new Error('stock.txt no disponible');
     const txt = await r.text();
-    const lines = txt.split('\n').map(l => l.trim()).filter(Boolean);
+    const lines = txt.split('\n').map(l=>l.trim()).filter(Boolean);
     if(!lines.length) throw new Error('stock vacío');
-    const pick = lines[Math.floor(Math.random()*lines.length)];
-    const cols = pick.split('|').map(x => (x ?? '').trim());
-    const title   = cols[0] || '';
-    const price   = cols[1] || '';
-    const monthly = cols[2] || '';
+    const pick = lines[Math.floor(Math.random()*lines.length)].split('|').map(x=>x.trim());
+    const title   = pick[0] || "";
+    const price   = pick[1] || "";
+    const monthly = pick[2] || "";
+
     chosenCar = { title, price, monthly };
-    const cuota = monthly ? (' • ' + monthly) : '';
+
     let first = 'Hola, estaba mirando este coche:\n';
-    if (title) first += title + '\n';
-    if (price || monthly) first += (price || '') + cuota;
-    bubble("cliente", first);
-  } catch(e){
-    console.warn('Stock falló, usando fallback:', e?.message || e);
-    chosenCar = { title: "SUV gasolina con dudas de consumo", price: "", monthly: "" };
-    bubble("cliente","Hola, vi un coche en vuestra web y me gustaría saber si lo puedo ver en esta tienda o traerlo para probarlo.");
+    const parts = [];
+    if (title)   parts.push(title);
+    if (price)   parts.push(price);
+    if (monthly) parts.push(monthly);
+    first += parts.join('\n');
+
+    // Lanzamos diálogo inicial con alguna intención (varía un poco)
+    const openers = [
+      first + "\n¿Podrías confirmarme si está disponible para verlo esta semana?",
+      first + "\nTengo dudas sobre el mantenimiento y el historial. ¿Me ayudas?",
+      first + "\nMe gusta, pero estoy comparando con otra marca. ¿Qué ventajas tiene este?"
+    ];
+    bubble("cliente", openers[Math.floor(Math.random()*openers.length)]);
+  }catch(e){
+    chosenCar = { title: "SUV gasolina", price: "", monthly: "" };
+    bubble("cliente","Hola, vi un coche interesante en vuestra web. ¿Podemos hablar para verlo y probarlo?");
   }
 }
 
+/* ======= llamar a la IA (simulación del cliente) ======= */
 async function simulate(){
-  const nivel = "MEDIO";
-  const user_email = "demo@crestanevada.es";
-  const car = chosenCar;
-
-  const system = `Eres un CLIENTE de concesionario en un role play comercial.
-Hablas de forma natural (1–3 frases), sin muletillas repetitivas.
-
-Usuario: ${user_email}
-Nivel: ${nivel}
-Vehículo: ${car?.title || "no especificado"} ${car?.price ? "• " + car.price : ""} ${car?.monthly ? "• " + car.monthly : ""}
-
-REGLAS PARA NIVEL MEDIO:
-- Siempre plantea al menos 2–3 objeciones antes de mostrar interés serio en el cierre.
-- Objeciones frecuentes: consumo, historial del vehículo, garantía, financiación, disponibilidad, prueba en otra fecha, tasación de su coche actual.
-- No aceptes una cita o compromiso hasta que:
-    1) Se haya resuelto al menos una objeción de forma convincente.
-    2) Se haya presentado un beneficio claro (precio, equipamiento, estado, condiciones).
-- Si el vendedor intenta cerrar muy pronto, responde con otra duda u objeción.
-- Aunque el coche te guste, añade una duda extra (ej: sobre la financiación, garantía o disponibilidad) antes de aceptar.
-- Sé coherente con lo que ya has dicho, no te contradigas.
-
-Responde solo con el mensaje del cliente, manteniendo el realismo.`;
-
   const r = await fetch('/api/simulate',{
     method:'POST',
     headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({ history, car: chosenCar, nivel, system })
+    body: JSON.stringify({ history, car: chosenCar, nivel: LEVEL })
   });
   const data = await r.json();
-  bubble("cliente", data.reply || "¿Podrías repetirme? No he recibido respuesta.");
+  bubble("cliente", data.reply || "¿Podrías repetirme?");
 }
 
+/* ======= finalizar: pide evaluación y registra en Google Sheets ======= */
 async function finish(){
+  if (locked) return;
   locked = true;
   document.getElementById('send').disabled = true;
   document.getElementById('finish').disabled = true;
+
   const r = await fetch('/api/evaluate',{
     method:'POST',
     headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({ transcript, car: chosenCar })
+    body: JSON.stringify({ transcript, car: chosenCar, nivel: LEVEL, email: userEmail })
   });
   const data = await r.text();
   const pre = document.createElement('pre');
@@ -146,6 +177,7 @@ async function finish(){
   document.getElementById('result').appendChild(pre);
 }
 
+/* ======= eventos UI ======= */
 document.getElementById('send').onclick = async ()=>{
   const v = document.getElementById('input').value.trim();
   if(!v) return;
@@ -155,5 +187,6 @@ document.getElementById('send').onclick = async ()=>{
 };
 document.getElementById('finish').onclick = finish;
 
+/* ======= arranque ======= */
 loadRandomCar();
 </script>
