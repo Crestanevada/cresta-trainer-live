@@ -1,224 +1,166 @@
-<!doctype html>
-<meta charset="utf-8" />
-<title>CrestaTrainer • Demo</title>
-<meta name="viewport" content="width=device-width,initial-scale=1" />
-<style>
-  :root {
-    --brand:#cc0000; --ok:#2ecc71; --ink:#212121; --bg:#f5f5f5;
-    --panel:#ffffff; --panel2:#fafafa; --line:#e0e0e0;
-  }
-  *{box-sizing:border-box}
-  body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;background:var(--bg);color:var(--ink)}
-  header{background:var(--brand);color:#fff;font-weight:700;padding:14px 18px;display:flex;align-items:center;gap:12px}
-  header .badge{background:#00000055;padding:4px 8px;border-radius:999px;font-weight:700;font-size:12px}
-  #wrap{max-width:900px;margin:18px auto;background:var(--panel);border-radius:12px;padding:18px 18px 10px;box-shadow:0 10px 20px rgba(0,0,0,.06)}
-  #top{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
-  #idline{display:flex;gap:10px;align-items:center;color:#555;font-size:14px}
-  #mode{background:#00000010;border:1px solid #00000020;padding:4px 8px;border-radius:999px;font-weight:800}
-  #timer{font-weight:800}
-  #chat{border:1px solid var(--line);border-radius:10px;padding:12px;height:420px;overflow:auto;background:var(--panel2)}
-  .b{margin:8px 0;padding:10px 12px;border-radius:10px;max-width:74%;white-space:pre-wrap;line-height:1.35}
-  .cli{background:#eee;color:#111}
-  .ven{background:var(--brand);color:#fff;margin-left:auto}
-  #bar{display:flex;gap:8px;margin-top:12px}
-  #input{flex:1;padding:10px;border-radius:8px;border:1px solid #ddd}
-  button{border:0;border-radius:8px;padding:10px 16px;font-weight:700;cursor:pointer}
-  #send{background:var(--ok);color:#fff}
-  #finish{background:#f3b000;color:#111}
-  pre{background:#111;color:#0f0;padding:12px;border-radius:8px;overflow:auto}
-  #result{margin-top:12px}
-</style>
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CrestaTrainer • Demo</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background-color: #f5f5f5;
+      margin: 0;
+      padding: 0;
+    }
+    header {
+      background-color: #d50000;
+      color: white;
+      padding: 10px;
+      display: flex;
+      align-items: center;
+    }
+    header span {
+      margin-right: 10px;
+      background-color: black;
+      color: white;
+      padding: 4px 8px;
+      border-radius: 4px;
+      font-weight: bold;
+      font-size: 0.9em;
+    }
+    .chat-container {
+      max-width: 900px;
+      margin: 20px auto;
+      background-color: white;
+      border-radius: 8px;
+      padding: 20px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+    .bubble {
+      padding: 10px;
+      border-radius: 8px;
+      margin-bottom: 10px;
+      white-space: pre-line;
+    }
+    .bubble.cliente {
+      background-color: #f0f0f0;
+      align-self: flex-start;
+    }
+    .bubble.vendedor {
+      background-color: #d50000;
+      color: white;
+      align-self: flex-end;
+    }
+    .input-area {
+      display: flex;
+      margin-top: 10px;
+    }
+    .input-area input {
+      flex: 1;
+      padding: 10px;
+      border-radius: 4px;
+      border: 1px solid #ccc;
+    }
+    .input-area button {
+      padding: 10px 15px;
+      margin-left: 5px;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-weight: bold;
+    }
+    .btn-enviar {
+      background-color: #00c853;
+      color: white;
+    }
+    .btn-finalizar {
+      background-color: #ffab00;
+      color: white;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <span id="modo">Modo: FÁCIL</span>
+    <div id="usuario">ruben.perrone@crestanebada.es</div>
+  </header>
 
-<header>
-  <div class="badge">CrestaTrainer • Demo</div>
-</header>
+  <div class="chat-container" id="chat"></div>
 
-<div id="wrap">
-  <div id="top">
-    <div id="idline">
-      <span id="mode">Modo: FÁCIL</span>
-      <span id="who"></span>
-    </div>
-    <div id="timer">10:00</div>
+  <div class="input-area">
+    <input type="text" id="input" placeholder="Escribe tu respuesta..." />
+    <button class="btn-enviar" onclick="enviar()">Enviar</button>
+    <button class="btn-finalizar" onclick="finalizar()">Finalizar</button>
   </div>
 
-  <div id="chat"></div>
+  <script>
+    let chosenCar = null;
 
-  <div id="bar">
-    <textarea id="input" rows="2" placeholder="Escribe tu respuesta..."></textarea>
-    <button id="send">Enviar</button>
-    <button id="finish">Finalizar</button>
-  </div>
+    function bubble(tipo, texto) {
+      const chat = document.getElementById("chat");
+      const div = document.createElement("div");
+      div.classList.add("bubble", tipo);
+      div.textContent = texto;
+      chat.appendChild(div);
+      chat.scrollTop = chat.scrollHeight;
+    }
 
-  <div id="result"></div>
-</div>
+    async function pickRandomCarFromStock(){
+      try{
+        const r = await fetch("/stock.txt", { cache:"no-store" });
+        if(!r.ok) throw new Error("stock.txt no disponible");
+        const txt = await r.text();
 
-<script>
-/* ===================== Estado ===================== */
-let history = [];          // para el /api/simulate
-let transcript = [];       // para el /api/evaluate
-let startTime = Date.now();
-let locked = false;
-let currentMode = "FÁCIL"; // mostrado; la API decide el comportamiento
-let userEmail = "";
-let chosenCar = null;      // { title, price, monthly }
+        // Filtrar líneas no válidas (CSS, JS, HTML, enlaces, etc.)
+        const linesRaw = txt.split("\n").map(s=>s.trim()).filter(Boolean);
+        const isLikelyCarLine = (l)=>{
+          if(!l) return false;
+          if (l.startsWith("#") || l.startsWith("//")) return false;
+          if (/[{}<>]|<\/?|\bfunction\b|\bconst\b|https?:\/\//i.test(l)) return false;
+          const hasWords = /[A-Za-zÁÉÍÓÚÜÑáéíóúüñ]/.test(l);
+          const hasPriceOrYear = /€|\b(20\d{2}|19\d{2})\b/.test(l);
+          return hasWords && hasPriceOrYear;
+        };
+        const lines = linesRaw.filter(isLikelyCarLine);
+        if(!lines.length) throw new Error("stock sin líneas válidas");
 
-/* ===================== Utiles seguros ===================== */
-function escapeHtml(s=""){
-  return s.replaceAll("&","&amp;").replaceAll("<","&lt;")
-          .replaceAll(">","&gt;").replaceAll('"',"&quot;").replaceAll("'","&#39;");
-}
-function bubble(role, text){
-  const div = document.createElement("div");
-  div.className = "b " + (role==="cliente" ? "cli":"ven");
-  // Cliente: permitimos saltos de línea, pero NADA de HTML
-  if(role==="cliente"){
-    div.textContent = text;
-    history.push({ role:"assistant", content:text });
-  }else{
-    div.textContent = text;
-    history.push({ role:"user", content:text });
-  }
-  document.getElementById("chat").appendChild(div);
-  const chat = document.getElementById("chat");
-  chat.scrollTop = chat.scrollHeight;
-  transcript.push({ speaker:role, text, ts: Date.now() });
-}
+        const pick = lines[Math.floor(Math.random()*lines.length)];
+        const parts = pick.split("|").map(s=>(s||"").trim());
+        const title   = parts[0] || "";
+        const price   = parts[1] || "";
+        const monthly = parts[2] || "";
 
-/* ===================== Temporizador ===================== */
-const DEADLINE = () => startTime + 10*60*1000; // 10 minutos
-function tick(){
-  const s = Math.max(0, Math.floor((DEADLINE()-Date.now())/1000));
-  const mm = String(Math.floor(s/60)).padStart(2,"0");
-  const ss = String(s%60).padStart(2,"0");
-  document.getElementById("timer").textContent = `${mm}:${ss}`;
-  if(s<=0 && !locked) finish();
-}
-setInterval(tick, 500);
+        chosenCar = { title, price, monthly };
 
-/* ===================== Login simple (email) ===================== */
-async function askEmail(){
-  const saved = localStorage.getItem("ct_email") || "";
-  let e = prompt("Introduce tu email corporativo para registrar tu sesión:", saved || "");
-  if(!e){ e = "anon@crestanevada.es"; }
-  userEmail = e.trim();
-  localStorage.setItem("ct_email", userEmail);
-  document.getElementById("who").textContent = userEmail;
-}
+        const msg = [
+          "Hola, estaba mirando este coche:",
+          title ? title : "",
+          (price || monthly) ? [price, monthly].filter(Boolean).join(" • ") : "",
+          "¿Podrías confirmarme si está disponible para verlo esta semana?"
+        ].filter(Boolean).join("\n");
 
-/* ===================== Stock aleatorio ===================== */
-async function pickRandomCarFromStock(){
-  try{
-    const r = await fetch("/stock.txt", { cache:"no-store" });
-    if(!r.ok) throw new Error("stock.txt no disponible");
-    const txt = await r.text();
-    const lines = txt.split("\n").map(s=>s.trim()).filter(Boolean);
-    if(!lines.length) throw new Error("stock vacío");
-    const pick = lines[Math.floor(Math.random()*lines.length)];
-    const [rawTitle="", rawPrice="", rawMonthly=""] = pick.split("|").map(s => (s||"").trim());
-    const title = rawTitle;
-    const price = rawPrice;
-    const monthly = rawMonthly;
-
-    chosenCar = { title, price, monthly };
-    // Mensaje inicial limpio (sin enlaces, sin código)
-    const parts = [];
-    parts.push("Hola, estaba mirando este coche:");
-    if(title)   parts.push(title);
-    if(price || monthly) parts.push([price, monthly].filter(Boolean).join(" • "));
-    parts.push("¿Podrías confirmarme si está disponible para verlo esta semana?");
-    bubble("cliente", parts.join("\n"));
-  }catch(err){
-    console.warn("Fallo stock:", err?.message || err);
-    chosenCar = { title:"SUV gasolina", price:"", monthly:"" };
-    bubble("cliente", "Hola, estaba mirando un SUV gasolina que vi en vuestra web. ¿Podrías confirmarme si está disponible para verlo esta semana?");
-  }
-}
-
-/* ===================== Simulación (cliente IA) ===================== */
-async function simulate(){
-  // Metadatos para que tu API pueda personalizar la dificultad y el personaje
-  const meta = {
-    mode: currentMode, email: userEmail, car: chosenCar,
-    elapsed_sec: Math.round((Date.now() - startTime)/1000)
-  };
-
-  const r = await fetch("/api/simulate", {
-    method:"POST",
-    headers:{ "Content-Type":"application/json" },
-    body: JSON.stringify({
-      history,
-      nivel: currentMode,   // tu API puede mapear FÁCIL/MEDIO/DIFÍCIL/IMPOSIBLE
-      car: chosenCar,
-      meta
-    })
-  });
-  const data = await r.json().catch(()=>({reply:""}));
-  const reply = (data && typeof data.reply === "string") ? data.reply.trim() : "";
-  bubble("cliente", reply || "¿Podrías repetirme? No he recibido respuesta.");
-}
-
-/* ===================== Finalizar + Evaluación ===================== */
-async function finish(){
-  if(locked) return;
-  locked = true;
-  document.getElementById("send").disabled = true;
-  document.getElementById("finish").disabled = true;
-
-  const elapsedMs = Date.now() - startTime;
-
-  // 1) Evaluación visible
-  const r = await fetch("/api/evaluate", {
-    method:"POST",
-    headers:{ "Content-Type":"application/json" },
-    body: JSON.stringify({
-      transcript,
-      meta: {
-        email: userEmail,
-        mode: currentMode,
-        car: chosenCar,
-        duration_ms: elapsedMs
+        bubble("cliente", msg);
+      }catch(err){
+        console.warn("Fallo stock:", err?.message || err);
+        chosenCar = { title:"SUV gasolina", price:"", monthly:"" };
+        bubble("cliente",
+          "Hola, estaba mirando un SUV gasolina que vi en vuestra web. ¿Podrías confirmarme si está disponible para verlo esta semana?");
       }
-    })
-  });
-  const text = await r.text().catch(()=>"{\"error\":\"evaluate failed\"}");
-  const pre = document.createElement("pre");
-  pre.textContent = text;
-  document.getElementById("result").appendChild(pre);
+    }
 
-  // 2) (Opcional) Registro a Sheets si tienes /api/log-run
-  fetch("/api/log-run", {
-    method:"POST",
-    headers:{ "Content-Type":"application/json" },
-    body: JSON.stringify({
-      email: userEmail,
-      mode: currentMode,
-      car: chosenCar,
-      started_at: new Date(startTime).toISOString(),
-      finished_at: new Date().toISOString(),
-      duration_ms: elapsedMs,
-      score_blob: text.slice(0, 2000) // previene payloads enormes
-    })
-  }).catch(()=>{});
-}
+    function enviar(){
+      const input = document.getElementById("input");
+      if(input.value.trim()){
+        bubble("vendedor", input.value.trim());
+        input.value = "";
+      }
+    }
 
-/* ===================== UI ===================== */
-document.getElementById("send").onclick = async ()=>{
-  const inp = document.getElementById("input");
-  const v = (inp.value || "").trim();
-  if(!v) return;
-  inp.value = "";
-  bubble("vendedor", v);
-  await simulate();
-};
-document.getElementById("finish").onclick = finish;
+    function finalizar(){
+      alert("Role play finalizado");
+    }
 
-/* ===================== Arranque ===================== */
-(async function boot(){
-  // modo fijo visible (no selector)
-  document.getElementById("mode").textContent = `Modo: ${currentMode}`;
-  await askEmail();
-  startTime = Date.now();
-  await pickRandomCarFromStock();
-})();
-</script>
+    // Lanzar la primera interacción
+    pickRandomCarFromStock();
+  </script>
+</body>
+</html>
