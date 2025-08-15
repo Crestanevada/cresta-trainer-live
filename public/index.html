@@ -43,11 +43,14 @@
   </div>
 
   <script>
-    // ---------- Estado ----------
-    const MODO = "FÁCIL";              // visible en la UI
+    // ---------- Config visible ----------
+    const MODO  = "FÁCIL"; // sólo mostrar (el cálculo real lo hace tu API)
     const EMAIL = "ruben.perrone@crestanevada.es";
-    let history = [];                   // chat history para la API
-    let transcript = [];                // para evaluación
+
+    // ---------- Estado ----------
+    let history = [];        // [{role:"user"|"assistant", content:"..."}]
+    let transcript = [];     // [{speaker:"vendedor"|"cliente", text:"..."}]
+    let chosenCar = null;    // { title, price, monthly, url? }
     let locked = false;
     let startTime = Date.now();
     let deadline = Date.now() + 10*60*1000; // 10 min
@@ -64,16 +67,16 @@
       const div = document.createElement('div');
       div.className = 'b ' + (role==="cliente" ? "cli" : "ven");
       div.innerHTML = escapeHtml(String(text||""));
-      document.getElementById('chat').appendChild(div);
-      document.getElementById('chat').scrollTop = document.getElementById('chat').scrollHeight;
+      const chat = document.getElementById('chat');
+      chat.appendChild(div);
+      chat.scrollTop = chat.scrollHeight;
 
-      // guardar para evaluación + construir history para la API
+      // guardar para evaluación + history API
       transcript.push({ speaker: role, text: String(text||"") });
-      if(role==="vendedor"){
-        history.push({ role:"user", content:String(text||"") });
-      }else{
-        history.push({ role:"assistant", content:String(text||"") });
-      }
+      history.push({
+        role: (role==="vendedor" ? "user" : "assistant"),
+        content: String(text||"")
+      });
     }
     function tick(){
       const s = Math.max(0, Math.floor((deadline-Date.now())/1000));
@@ -84,13 +87,53 @@
     }
     setInterval(tick,500);
 
+    // ---------- Stock inicial: coche aleatorio ----------
+    async function loadRandomCar(){
+      try{
+        const r = await fetch('/stock.txt', { cache:'no-store' });
+        if(!r.ok) throw new Error('stock.txt no disponible');
+        const txt = await r.text();
+
+        const lines = txt.split('\n')
+          .map(l=>l.trim())
+          .filter(Boolean);
+
+        if(!lines.length) throw new Error('stock vacío');
+
+        const pick = lines[Math.floor(Math.random()*lines.length)];
+        const cols = pick.split('|').map(x => (x ?? '').trim());
+        const title   = cols[0] || "";
+        const price   = cols[1] || "";
+        const monthly = cols[2] || "";
+        const url     = cols[3] || "";
+
+        chosenCar = { title, price, monthly, url };
+
+        // Mensaje inicial sin enlaces
+        let intro = 'Hola, estaba mirando este coche:\n';
+        if (title) intro += title + '\n';
+        if (price || monthly){
+          intro += (price || '');
+          if (monthly) intro += ' • ' + monthly;
+          intro += '\n';
+        }
+        intro += '¿Podrías confirmarme si está disponible para verlo esta semana?';
+
+        bubble("cliente", intro);
+      }catch(e){
+        console.warn('Stock falló, usando fallback:', e?.message||e);
+        chosenCar = { title: "SUV gasolina con dudas de consumo", price:"", monthly:"" };
+        bubble("cliente","Hola, vi un coche en vuestra web y me gustaría saber si lo puedo ver en esta tienda o traerlo para probarlo.");
+      }
+    }
+
     // ---------- Llamadas API ----------
-    async function callSimulate() {
-      // POST a /api/simulate con history + modo
-      const r = await fetch('/api/simulate', {
+    async function callSimulate(){
+      // Siempre POST y enviamos también el coche elegido
+      const r = await fetch('/api/simulate',{
         method:'POST',
         headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({ history, nivel: MODO }) // tu API usa {history, nivel}
+        body: JSON.stringify({ history, nivel: MODO, car: chosenCar })
       });
       if(!r.ok){
         const t = await r.text().catch(()=> "");
@@ -100,24 +143,13 @@
       return typeof data?.reply === "string" ? data.reply : "";
     }
 
-    async function startConversation(){
-      try{
-        const clientIntro = await callSimulate(); // primera respuesta del cliente
-        const intro = clientIntro || "Hola, vi un coche en vuestra web y me gustaría saber si lo puedo ver en esta tienda o traerlo para probarlo.";
-        bubble("cliente", intro);
-      }catch(e){
-        bubble("cliente", "Hola, ¿me puedes ayudar con un coche que vi en vuestra web?");
-        console.warn(e);
-      }
-    }
-
-    async function simulateTurn(vendorText){
+    async function simulateTurn(){
       try{
         const clientReply = await callSimulate();
         bubble("cliente", clientReply || "¿Podrías detallarme un poco más?");
       }catch(e){
-        bubble("cliente", "Perdona, no te he entendido. ¿Me lo repites?");
         console.warn(e);
+        bubble("cliente","Perdona, no te he entendido. ¿Me lo repites?");
       }
     }
 
@@ -127,11 +159,12 @@
       document.getElementById('finish').disabled = true;
 
       const duracion_seg = Math.round((Date.now() - startTime)/1000);
+
       try{
         const r = await fetch('/api/evaluate',{
           method:'POST',
           headers:{'Content-Type':'application/json'},
-          body: JSON.stringify({ transcript, nivel: MODO, email: EMAIL, duracion_seg })
+          body: JSON.stringify({ transcript, nivel:MODO, email:EMAIL, car:chosenCar, duracion_seg })
         });
         const data = await r.text();
         const pre = document.createElement('pre');
@@ -149,17 +182,18 @@
     document.getElementById('user-email').textContent = EMAIL;
 
     document.getElementById('send').onclick = async ()=>{
+      if(locked) return;
       const box = document.getElementById('input');
       const v = box.value.trim();
-      if(!v || locked) return;
+      if(!v) return;
       box.value = "";
       bubble("vendedor", v);
-      await simulateTurn(v);
+      await simulateTurn();
     };
     document.getElementById('finish').onclick = finish;
 
     // ---------- Arranque ----------
-    startConversation();
+    loadRandomCar(); // primer mensaje del cliente con coche del stock
   </script>
 </body>
 </html>
