@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "dependencies": {
-    "openai": "^4.52.0"
+    "openai": "^4.52.0",
+    "googleapis": "^131.0.0"
   }
 }
