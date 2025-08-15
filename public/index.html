@@ -77,17 +77,58 @@ function bubble(role, text){
 }
 
 // ===== cargar stock y elegir coche =====
+<script>
+// ...deja intacto el resto del script...
+
 async function loadRandomCar(){
   try{
     const r = await fetch('/stock.txt', { cache: 'no-store' });
     if(!r.ok) throw new Error('stock.txt no disponible');
     const txt = await r.text();
-    const lines = txt.split('\n').map(l=>l.trim()).filter(Boolean);
+
+    // preparar líneas válidas (4 columnas mínimo)
+    const lines = txt.split('\n')
+      .map(l => l.trim())
+      .filter(Boolean);
+
     if(!lines.length) throw new Error('stock vacío');
+
     const pick = lines[Math.floor(Math.random()*lines.length)];
-    const [title, price, monthly, url] = pick.split('|').map(x=>x?.trim() || "");
+    const cols = pick.split('|').map(x => (x ?? '').trim());
+
+    // rellenar huecos si faltan columnas
+    const title   = cols[0] || '';
+    const price   = cols[1] || '';
+    const monthly = cols[2] || '';
+    const url     = cols[3] || '';
+
+    // guarda el coche elegido
     chosenCar = { title, price, monthly, url };
 
+    // evitar backticks anidados: compón la parte de cuota aparte
+    const cuota = monthly ? (' • ' + monthly) : '';
+    // construye el mensaje solo con lo que exista
+    let first = 'Hola, estaba mirando este coche:\n';
+    if (title) first += title + '\n';
+    if (price || monthly) first += (price || '') + cuota + '\n';
+    if (url) first += url;
+
+    // si por lo que sea quedó muy corto, mete un fallback
+    if (first.trim() === 'Hola, estaba mirando este coche:') {
+      throw new Error('línea de stock incompleta');
+    }
+
+    bubble("cliente", first);
+
+  } catch(e){
+    console.warn('Stock falló o incompleto, usando fallback:', e?.message || e);
+    chosenCar = { title: "SUV gasolina con dudas de consumo", price: "", monthly: "", url: "" };
+    bubble("cliente","Hola, vi un coche en vuestra web y me gustaría saber si lo puedo ver en esta tienda o traerlo para probarlo.");
+  }
+}
+
+// ...deja intacto el resto del script...
+</script>
     const first =
 `Hola, estaba mirando este coche:
 ${title}
