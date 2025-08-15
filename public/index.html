@@ -30,14 +30,16 @@
   </div>
   <div id="result"></div>
 </div>
+
 <script>
+/* ===== estado ===== */
 let history = [];
 let transcript = [];
 let deadline = Date.now() + 10*60*1000; // 10 minutos
 let locked = false;
 let chosenCar = null;
 
-// ===== utilidades para links seguros =====
+/* ===== utilidades para links seguros ===== */
 function escapeHtml(s){
   return s.replace(/&/g,"&amp;")
           .replace(/</g,"&lt;")
@@ -50,7 +52,7 @@ function linkifySafe(s){
   return esc.replace(/https?:\/\/[^\s<]+/g, (u)=>`<a href="${u}" target="_blank" rel="noopener">${u}</a>`);
 }
 
-// ===== temporizador =====
+/* ===== temporizador ===== */
 function tick(){
   const s = Math.max(0, Math.floor((deadline-Date.now())/1000));
   const mm = String(Math.floor(s/60)).padStart(2,'0');
@@ -60,7 +62,7 @@ function tick(){
 }
 setInterval(tick,500);
 
-// ===== burbujas =====
+/* ===== burbujas ===== */
 function bubble(role, text){
   const div = document.createElement('div');
   div.className = 'b ' + (role==="cliente" ? "cli":"ven");
@@ -76,74 +78,46 @@ function bubble(role, text){
   transcript.push({speaker: role, text});
 }
 
-// ===== cargar stock y elegir coche =====
-<script>
-// ...deja intacto el resto del script...
-
+/* ===== cargar stock y elegir coche =====
+   Formato de cada línea en /public/stock.txt:
+   Título | Precio | Cuota | URL
+   (usa tuberías | como separador, sin comillas)
+*/
 async function loadRandomCar(){
   try{
     const r = await fetch('/stock.txt', { cache: 'no-store' });
     if(!r.ok) throw new Error('stock.txt no disponible');
     const txt = await r.text();
 
-    // preparar líneas válidas (4 columnas mínimo)
-    const lines = txt.split('\n')
-      .map(l => l.trim())
-      .filter(Boolean);
-
+    const lines = txt.split('\n').map(l=>l.trim()).filter(Boolean);
     if(!lines.length) throw new Error('stock vacío');
 
     const pick = lines[Math.floor(Math.random()*lines.length)];
     const cols = pick.split('|').map(x => (x ?? '').trim());
 
-    // rellenar huecos si faltan columnas
     const title   = cols[0] || '';
     const price   = cols[1] || '';
     const monthly = cols[2] || '';
     const url     = cols[3] || '';
 
-    // guarda el coche elegido
     chosenCar = { title, price, monthly, url };
 
-    // evitar backticks anidados: compón la parte de cuota aparte
-    const cuota = monthly ? (' • ' + monthly) : '';
-    // construye el mensaje solo con lo que exista
-    let first = 'Hola, estaba mirando este coche:\n';
-    if (title) first += title + '\n';
-    if (price || monthly) first += (price || '') + cuota + '\n';
-    if (url) first += url;
+    const parts = ['Hola, estaba mirando este coche:'];
+    if (title) parts.push(title);
+    if (price || monthly) parts.push((price || '') + (monthly ? (' • ' + monthly) : ''));
+    if (url) parts.push(url);
 
-    // si por lo que sea quedó muy corto, mete un fallback
-    if (first.trim() === 'Hola, estaba mirando este coche:') {
-      throw new Error('línea de stock incompleta');
-    }
+    if (parts.length === 1) throw new Error('línea de stock incompleta');
 
-    bubble("cliente", first);
-
-  } catch(e){
+    bubble("cliente", parts.join('\n'));
+  }catch(e){
     console.warn('Stock falló o incompleto, usando fallback:', e?.message || e);
     chosenCar = { title: "SUV gasolina con dudas de consumo", price: "", monthly: "", url: "" };
     bubble("cliente","Hola, vi un coche en vuestra web y me gustaría saber si lo puedo ver en esta tienda o traerlo para probarlo.");
   }
 }
 
-// ...deja intacto el resto del script...
-</script>
-    const first =
-`Hola, estaba mirando este coche:
-${title}
-${price}${monthly ? ` • ${monthly}` : ""}
-${url}`;
-    bubble("cliente", first);
-  }catch(e){
-    // Fallback local si falla el stock
-    chosenCar = { title: "SUV gasolina con dudas de consumo", price: "", monthly: "", url: "" };
-    bubble("cliente","Hola, vi un coche en vuestra web y me gustaría saber si lo puedo ver en esta tienda o traerlo para probarlo.");
-    console.warn('Stock falló, usando fallback:', e?.message || e);
-  }
-}
-
-// ===== simular cliente (IA) =====
+/* ===== simular cliente (IA) ===== */
 async function simulate(){
   const r = await fetch('/api/simulate',{
     method:'POST',
@@ -154,7 +128,7 @@ async function simulate(){
   bubble("cliente", data.reply || "¿Podrías repetirme? No he recibido respuesta.");
 }
 
-// ===== finalizar y evaluar =====
+/* ===== finalizar y evaluar ===== */
 async function finish(){
   locked = true;
   document.getElementById('send').disabled = true;
@@ -170,7 +144,7 @@ async function finish(){
   document.getElementById('result').appendChild(pre);
 }
 
-// ===== eventos UI =====
+/* ===== eventos UI ===== */
 document.getElementById('send').onclick = async ()=>{
   const v = document.getElementById('input').value.trim();
   if(!v) return;
@@ -180,6 +154,6 @@ document.getElementById('send').onclick = async ()=>{
 };
 document.getElementById('finish').onclick = finish;
 
-// ===== arranque =====
+/* ===== arranque ===== */
 loadRandomCar();
 </script>
