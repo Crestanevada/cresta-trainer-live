@@ -1,199 +1,224 @@
 <!doctype html>
-<html lang="es">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>CrestaTrainer • Demo</title>
-  <style>
-    body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;margin:0;background:#f5f5f5}
-    header{background:#cc0000;color:#fff;padding:12px 16px;font-weight:700;display:flex;gap:12px;align-items:center}
-    .pill{background:#000;color:#fff;padding:4px 10px;border-radius:999px;font-size:12px}
-    #wrap{max-width:900px;margin:20px auto;background:#fff;border-radius:12px;padding:16px 16px 8px;box-shadow:0 10px 20px rgba(0,0,0,.06)}
-    #top{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
-    #timer{font-weight:700}
-    #chat{border:1px solid #e0e0e0;border-radius:10px;padding:12px;height:420px;overflow:auto;background:#fafafa}
-    .b{margin:8px 0;padding:10px 12px;border-radius:10px;max-width:70%;white-space:pre-wrap}
-    .cli{background:#eee;color:#212121}
-    .ven{background:#cc0000;color:#fff;margin-left:auto}
-    #bar{display:flex;gap:8px;margin-top:12px}
-    #input{flex:1;padding:10px;border-radius:8px;border:1px solid #ddd}
-    button{background:#2ecc71;color:#fff;border:0;border-radius:8px;padding:10px 16px;font-weight:700;cursor:pointer}
-    button.finish{background:#ffc107;color:#000}
-    pre{background:#111;color:#0f0;padding:12px;border-radius:8px;overflow:auto}
-  </style>
-</head>
-<body>
-  <header>
-    <span class="pill" id="mode-pill">Modo: FÁCIL</span>
-    <span id="user-email">ruben.perrone@crestanevada.es</span>
-  </header>
+<meta charset="utf-8" />
+<title>CrestaTrainer • Demo</title>
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<style>
+  :root {
+    --brand:#cc0000; --ok:#2ecc71; --ink:#212121; --bg:#f5f5f5;
+    --panel:#ffffff; --panel2:#fafafa; --line:#e0e0e0;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;background:var(--bg);color:var(--ink)}
+  header{background:var(--brand);color:#fff;font-weight:700;padding:14px 18px;display:flex;align-items:center;gap:12px}
+  header .badge{background:#00000055;padding:4px 8px;border-radius:999px;font-weight:700;font-size:12px}
+  #wrap{max-width:900px;margin:18px auto;background:var(--panel);border-radius:12px;padding:18px 18px 10px;box-shadow:0 10px 20px rgba(0,0,0,.06)}
+  #top{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
+  #idline{display:flex;gap:10px;align-items:center;color:#555;font-size:14px}
+  #mode{background:#00000010;border:1px solid #00000020;padding:4px 8px;border-radius:999px;font-weight:800}
+  #timer{font-weight:800}
+  #chat{border:1px solid var(--line);border-radius:10px;padding:12px;height:420px;overflow:auto;background:var(--panel2)}
+  .b{margin:8px 0;padding:10px 12px;border-radius:10px;max-width:74%;white-space:pre-wrap;line-height:1.35}
+  .cli{background:#eee;color:#111}
+  .ven{background:var(--brand);color:#fff;margin-left:auto}
+  #bar{display:flex;gap:8px;margin-top:12px}
+  #input{flex:1;padding:10px;border-radius:8px;border:1px solid #ddd}
+  button{border:0;border-radius:8px;padding:10px 16px;font-weight:700;cursor:pointer}
+  #send{background:var(--ok);color:#fff}
+  #finish{background:#f3b000;color:#111}
+  pre{background:#111;color:#0f0;padding:12px;border-radius:8px;overflow:auto}
+  #result{margin-top:12px}
+</style>
 
-  <div id="wrap">
-    <div id="top">
-      <div></div>
-      <div id="timer">10:00</div>
+<header>
+  <div class="badge">CrestaTrainer • Demo</div>
+</header>
+
+<div id="wrap">
+  <div id="top">
+    <div id="idline">
+      <span id="mode">Modo: FÁCIL</span>
+      <span id="who"></span>
     </div>
-    <div id="chat"></div>
-    <div id="bar">
-      <textarea id="input" rows="2" placeholder="Escribe tu respuesta..."></textarea>
-      <button id="send">Enviar</button>
-      <button id="finish" class="finish">Finalizar</button>
-    </div>
-    <div id="result"></div>
+    <div id="timer">10:00</div>
   </div>
 
-  <script>
-    // ---------- Config visible ----------
-    const MODO  = "FÁCIL"; // sólo mostrar (el cálculo real lo hace tu API)
-    const EMAIL = "ruben.perrone@crestanevada.es";
+  <div id="chat"></div>
 
-    // ---------- Estado ----------
-    let history = [];        // [{role:"user"|"assistant", content:"..."}]
-    let transcript = [];     // [{speaker:"vendedor"|"cliente", text:"..."}]
-    let chosenCar = null;    // { title, price, monthly, url? }
-    let locked = false;
-    let startTime = Date.now();
-    let deadline = Date.now() + 10*60*1000; // 10 min
+  <div id="bar">
+    <textarea id="input" rows="2" placeholder="Escribe tu respuesta..."></textarea>
+    <button id="send">Enviar</button>
+    <button id="finish">Finalizar</button>
+  </div>
 
-    // ---------- Util ----------
-    function escapeHtml(s=""){
-      return s.replace(/&/g,"&amp;")
-              .replace(/</g,"&lt;")
-              .replace(/>/g,"&gt;")
-              .replace(/"/g,"&quot;")
-              .replace(/'/g,"&#39;");
-    }
-    function bubble(role, text){
-      const div = document.createElement('div');
-      div.className = 'b ' + (role==="cliente" ? "cli" : "ven");
-      div.innerHTML = escapeHtml(String(text||""));
-      const chat = document.getElementById('chat');
-      chat.appendChild(div);
-      chat.scrollTop = chat.scrollHeight;
+  <div id="result"></div>
+</div>
 
-      // guardar para evaluación + history API
-      transcript.push({ speaker: role, text: String(text||"") });
-      history.push({
-        role: (role==="vendedor" ? "user" : "assistant"),
-        content: String(text||"")
-      });
-    }
-    function tick(){
-      const s = Math.max(0, Math.floor((deadline-Date.now())/1000));
-      const mm = String(Math.floor(s/60)).padStart(2,'0');
-      const ss = String(s%60).padStart(2,'0');
-      document.getElementById('timer').textContent = `${mm}:${ss}`;
-      if(s<=0 && !locked) finish();
-    }
-    setInterval(tick,500);
+<script>
+/* ===================== Estado ===================== */
+let history = [];          // para el /api/simulate
+let transcript = [];       // para el /api/evaluate
+let startTime = Date.now();
+let locked = false;
+let currentMode = "FÁCIL"; // mostrado; la API decide el comportamiento
+let userEmail = "";
+let chosenCar = null;      // { title, price, monthly }
 
-    // ---------- Stock inicial: coche aleatorio ----------
-    async function loadRandomCar(){
-      try{
-        const r = await fetch('/stock.txt', { cache:'no-store' });
-        if(!r.ok) throw new Error('stock.txt no disponible');
-        const txt = await r.text();
+/* ===================== Utiles seguros ===================== */
+function escapeHtml(s=""){
+  return s.replaceAll("&","&amp;").replaceAll("<","&lt;")
+          .replaceAll(">","&gt;").replaceAll('"',"&quot;").replaceAll("'","&#39;");
+}
+function bubble(role, text){
+  const div = document.createElement("div");
+  div.className = "b " + (role==="cliente" ? "cli":"ven");
+  // Cliente: permitimos saltos de línea, pero NADA de HTML
+  if(role==="cliente"){
+    div.textContent = text;
+    history.push({ role:"assistant", content:text });
+  }else{
+    div.textContent = text;
+    history.push({ role:"user", content:text });
+  }
+  document.getElementById("chat").appendChild(div);
+  const chat = document.getElementById("chat");
+  chat.scrollTop = chat.scrollHeight;
+  transcript.push({ speaker:role, text, ts: Date.now() });
+}
 
-        const lines = txt.split('\n')
-          .map(l=>l.trim())
-          .filter(Boolean);
+/* ===================== Temporizador ===================== */
+const DEADLINE = () => startTime + 10*60*1000; // 10 minutos
+function tick(){
+  const s = Math.max(0, Math.floor((DEADLINE()-Date.now())/1000));
+  const mm = String(Math.floor(s/60)).padStart(2,"0");
+  const ss = String(s%60).padStart(2,"0");
+  document.getElementById("timer").textContent = `${mm}:${ss}`;
+  if(s<=0 && !locked) finish();
+}
+setInterval(tick, 500);
 
-        if(!lines.length) throw new Error('stock vacío');
+/* ===================== Login simple (email) ===================== */
+async function askEmail(){
+  const saved = localStorage.getItem("ct_email") || "";
+  let e = prompt("Introduce tu email corporativo para registrar tu sesión:", saved || "");
+  if(!e){ e = "anon@crestanevada.es"; }
+  userEmail = e.trim();
+  localStorage.setItem("ct_email", userEmail);
+  document.getElementById("who").textContent = userEmail;
+}
 
-        const pick = lines[Math.floor(Math.random()*lines.length)];
-        const cols = pick.split('|').map(x => (x ?? '').trim());
-        const title   = cols[0] || "";
-        const price   = cols[1] || "";
-        const monthly = cols[2] || "";
-        const url     = cols[3] || "";
+/* ===================== Stock aleatorio ===================== */
+async function pickRandomCarFromStock(){
+  try{
+    const r = await fetch("/stock.txt", { cache:"no-store" });
+    if(!r.ok) throw new Error("stock.txt no disponible");
+    const txt = await r.text();
+    const lines = txt.split("\n").map(s=>s.trim()).filter(Boolean);
+    if(!lines.length) throw new Error("stock vacío");
+    const pick = lines[Math.floor(Math.random()*lines.length)];
+    const [rawTitle="", rawPrice="", rawMonthly=""] = pick.split("|").map(s => (s||"").trim());
+    const title = rawTitle;
+    const price = rawPrice;
+    const monthly = rawMonthly;
 
-        chosenCar = { title, price, monthly, url };
+    chosenCar = { title, price, monthly };
+    // Mensaje inicial limpio (sin enlaces, sin código)
+    const parts = [];
+    parts.push("Hola, estaba mirando este coche:");
+    if(title)   parts.push(title);
+    if(price || monthly) parts.push([price, monthly].filter(Boolean).join(" • "));
+    parts.push("¿Podrías confirmarme si está disponible para verlo esta semana?");
+    bubble("cliente", parts.join("\n"));
+  }catch(err){
+    console.warn("Fallo stock:", err?.message || err);
+    chosenCar = { title:"SUV gasolina", price:"", monthly:"" };
+    bubble("cliente", "Hola, estaba mirando un SUV gasolina que vi en vuestra web. ¿Podrías confirmarme si está disponible para verlo esta semana?");
+  }
+}
 
-        // Mensaje inicial sin enlaces
-        let intro = 'Hola, estaba mirando este coche:\n';
-        if (title) intro += title + '\n';
-        if (price || monthly){
-          intro += (price || '');
-          if (monthly) intro += ' • ' + monthly;
-          intro += '\n';
-        }
-        intro += '¿Podrías confirmarme si está disponible para verlo esta semana?';
+/* ===================== Simulación (cliente IA) ===================== */
+async function simulate(){
+  // Metadatos para que tu API pueda personalizar la dificultad y el personaje
+  const meta = {
+    mode: currentMode, email: userEmail, car: chosenCar,
+    elapsed_sec: Math.round((Date.now() - startTime)/1000)
+  };
 
-        bubble("cliente", intro);
-      }catch(e){
-        console.warn('Stock falló, usando fallback:', e?.message||e);
-        chosenCar = { title: "SUV gasolina con dudas de consumo", price:"", monthly:"" };
-        bubble("cliente","Hola, vi un coche en vuestra web y me gustaría saber si lo puedo ver en esta tienda o traerlo para probarlo.");
+  const r = await fetch("/api/simulate", {
+    method:"POST",
+    headers:{ "Content-Type":"application/json" },
+    body: JSON.stringify({
+      history,
+      nivel: currentMode,   // tu API puede mapear FÁCIL/MEDIO/DIFÍCIL/IMPOSIBLE
+      car: chosenCar,
+      meta
+    })
+  });
+  const data = await r.json().catch(()=>({reply:""}));
+  const reply = (data && typeof data.reply === "string") ? data.reply.trim() : "";
+  bubble("cliente", reply || "¿Podrías repetirme? No he recibido respuesta.");
+}
+
+/* ===================== Finalizar + Evaluación ===================== */
+async function finish(){
+  if(locked) return;
+  locked = true;
+  document.getElementById("send").disabled = true;
+  document.getElementById("finish").disabled = true;
+
+  const elapsedMs = Date.now() - startTime;
+
+  // 1) Evaluación visible
+  const r = await fetch("/api/evaluate", {
+    method:"POST",
+    headers:{ "Content-Type":"application/json" },
+    body: JSON.stringify({
+      transcript,
+      meta: {
+        email: userEmail,
+        mode: currentMode,
+        car: chosenCar,
+        duration_ms: elapsedMs
       }
-    }
+    })
+  });
+  const text = await r.text().catch(()=>"{\"error\":\"evaluate failed\"}");
+  const pre = document.createElement("pre");
+  pre.textContent = text;
+  document.getElementById("result").appendChild(pre);
 
-    // ---------- Llamadas API ----------
-    async function callSimulate(){
-      // Siempre POST y enviamos también el coche elegido
-      const r = await fetch('/api/simulate',{
-        method:'POST',
-        headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({ history, nivel: MODO, car: chosenCar })
-      });
-      if(!r.ok){
-        const t = await r.text().catch(()=> "");
-        throw new Error(`Simulate ${r.status}: ${t}`);
-      }
-      const data = await r.json().catch(()=> ({}));
-      return typeof data?.reply === "string" ? data.reply : "";
-    }
+  // 2) (Opcional) Registro a Sheets si tienes /api/log-run
+  fetch("/api/log-run", {
+    method:"POST",
+    headers:{ "Content-Type":"application/json" },
+    body: JSON.stringify({
+      email: userEmail,
+      mode: currentMode,
+      car: chosenCar,
+      started_at: new Date(startTime).toISOString(),
+      finished_at: new Date().toISOString(),
+      duration_ms: elapsedMs,
+      score_blob: text.slice(0, 2000) // previene payloads enormes
+    })
+  }).catch(()=>{});
+}
 
-    async function simulateTurn(){
-      try{
-        const clientReply = await callSimulate();
-        bubble("cliente", clientReply || "¿Podrías detallarme un poco más?");
-      }catch(e){
-        console.warn(e);
-        bubble("cliente","Perdona, no te he entendido. ¿Me lo repites?");
-      }
-    }
+/* ===================== UI ===================== */
+document.getElementById("send").onclick = async ()=>{
+  const inp = document.getElementById("input");
+  const v = (inp.value || "").trim();
+  if(!v) return;
+  inp.value = "";
+  bubble("vendedor", v);
+  await simulate();
+};
+document.getElementById("finish").onclick = finish;
 
-    async function finish(){
-      locked = true;
-      document.getElementById('send').disabled = true;
-      document.getElementById('finish').disabled = true;
-
-      const duracion_seg = Math.round((Date.now() - startTime)/1000);
-
-      try{
-        const r = await fetch('/api/evaluate',{
-          method:'POST',
-          headers:{'Content-Type':'application/json'},
-          body: JSON.stringify({ transcript, nivel:MODO, email:EMAIL, car:chosenCar, duracion_seg })
-        });
-        const data = await r.text();
-        const pre = document.createElement('pre');
-        pre.textContent = data;
-        document.getElementById('result').appendChild(pre);
-      }catch(e){
-        const pre = document.createElement('pre');
-        pre.textContent = 'Error al evaluar: ' + (e?.message||e);
-        document.getElementById('result').appendChild(pre);
-      }
-    }
-
-    // ---------- UI ----------
-    document.getElementById('mode-pill').textContent = `Modo: ${MODO}`;
-    document.getElementById('user-email').textContent = EMAIL;
-
-    document.getElementById('send').onclick = async ()=>{
-      if(locked) return;
-      const box = document.getElementById('input');
-      const v = box.value.trim();
-      if(!v) return;
-      box.value = "";
-      bubble("vendedor", v);
-      await simulateTurn();
-    };
-    document.getElementById('finish').onclick = finish;
-
-    // ---------- Arranque ----------
-    loadRandomCar(); // primer mensaje del cliente con coche del stock
-  </script>
-</body>
-</html>
+/* ===================== Arranque ===================== */
+(async function boot(){
+  // modo fijo visible (no selector)
+  document.getElementById("mode").textContent = `Modo: ${currentMode}`;
+  await askEmail();
+  startTime = Date.now();
+  await pickRandomCarFromStock();
+})();
+</script>
