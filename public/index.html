@@ -20,7 +20,7 @@
 <div id="wrap">
   <div id="top">
     <div><strong>Nivel:</strong> Medio</div>
-    <div id="timer">05:00</div>
+    <div id="timer">10:00</div>
   </div>
   <div id="chat"></div>
   <div id="bar">
@@ -33,7 +33,7 @@
 <script>
 let history = [];
 let transcript = [];
-let deadline = Date.now() + 10*60*1000;
+let deadline = Date.now() + 10*60*1000; // Tiempo a 10 minutos
 let locked = false;
 
 function tick(){
@@ -56,9 +56,31 @@ function bubble(role, text){
   else { history.push({role:"assistant", content:text}); }
 }
 
+async function getRandomCar() {
+  try {
+    const res = await fetch('https://api.allorigins.win/raw?url=https://www.crestanevada.es/coches-segunda-mano/');
+    const html = await res.text();
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(html, 'text/html');
+    const carElements = doc.querySelectorAll('.titulo, h2, a');
+    let cars = [];
+    carElements.forEach(el => {
+      let text = el.textContent.trim();
+      if (text.length > 10 && /\d{4}/.test(text)) {
+        cars.push(text);
+      }
+    });
+    if (cars.length === 0) return "un coche que vi en vuestra web";
+    return cars[Math.floor(Math.random() * cars.length)];
+  } catch (error) {
+    console.error("Error obteniendo coches:", error);
+    return "un coche que vi en vuestra web";
+  }
+}
+
 async function simulate(){
   const r = await fetch('/api/simulate',{method:'POST',headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({ history, caso:"SUV con dudas de consumo", nivel:"MEDIO" })});
+    body: JSON.stringify({ history, caso:"Cliente preguntando por un coche específico", nivel:"MEDIO" })});
   const data = await r.json();
   bubble("cliente", data.reply);
 }
@@ -84,5 +106,13 @@ document.getElementById('send').onclick = async ()=>{
 };
 document.getElementById('finish').onclick = finish;
 
-bubble("cliente","Hola, vi el SUV X online pero me preocupa el consumo en ciudad. ¿Qué me puedes contar?");
+(async () => {
+  let car = await getRandomCar();
+  let intro = [
+    `Hola, vi el ${car} en vuestra web y me gustó mucho, pero me preocupa el consumo en ciudad. ¿Qué me puedes contar?`,
+    `Buenas, estuve mirando el ${car} que tenéis en la web y quería saber si está disponible en esta tienda o si me lo podríais traer para verlo y probarlo.`,
+    `Hola, estoy interesado en el ${car} que vi en vuestra página. Me gusta más que otras marcas que he visto, pero tengo dudas sobre su mantenimiento.`
+  ];
+  bubble("cliente", intro[Math.floor(Math.random()*intro.length)]);
+})();
 </script>
