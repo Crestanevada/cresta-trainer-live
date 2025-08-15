@@ -1,222 +1,167 @@
-<!doctype html>
-<meta charset="utf-8" />
-<title>CrestaTrainer • Demo</title>
-<style>
-  :root { --brand:#cc0000; --ok:#2ecc71; --bg:#f5f5f5; --card:#fff; --ink:#222; }
-  * { box-sizing: border-box; }
-  body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; margin: 0; background: var(--bg); color: var(--ink); }
-  header { background:var(--brand); color:#fff; padding:12px 18px; font-weight:700; }
-  #wrap { max-width:960px; margin:20px auto; background:var(--card); border-radius:12px; padding:16px; box-shadow:0 10px 20px rgba(0,0,0,.06); }
-  #top { display:flex; gap:10px; align-items:center; justify-content:space-between; margin-bottom:12px; }
-  #who { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
-  .badge { background:#111; color:#fff; padding:4px 10px; border-radius:999px; font-size:12px; font-weight:700; }
-  .badge.mode { background:#222; }
-  .email { font-size:12px; opacity:.9; }
-  #timer { font-weight:700; }
-  #chat { border:1px solid #e0e0e0; border-radius:10px; padding:12px; height:440px; overflow:auto; background:#fafafa; }
-  .b { margin:8px 0; padding:10px 12px; border-radius:10px; max-width:78%; white-space:pre-wrap; line-height:1.35; }
-  .cli { background:#eee; color:#111; }
-  .ven { background:var(--brand); color:#fff; margin-left:auto; }
-  #bar { display:flex; gap:8px; margin-top:12px; }
-  #input { flex:1; padding:10px; border-radius:8px; border:1px solid #ddd; }
-  button { background:var(--ok); color:#fff; border:0; border-radius:8px; padding:10px 16px; font-weight:700; cursor:pointer; }
-  button[disabled]{ opacity:.6; cursor:not-allowed; }
-  .btn-warn { background:#f1b80b; color:#111; }
-  pre { background:#111; color:#0f0; padding:12px; border-radius:8px; overflow:auto; }
-</style>
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>CrestaTrainer • Demo</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f5f5f5;
+            margin: 0;
+            padding: 0;
+        }
+        header {
+            background-color: #b60000;
+            color: white;
+            padding: 12px;
+            font-size: 20px;
+            font-weight: bold;
+        }
+        .mode-label {
+            display: inline-block;
+            background-color: black;
+            color: white;
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 14px;
+            margin-right: 10px;
+        }
+        .chat {
+            max-width: 800px;
+            margin: 20px auto;
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            min-height: 300px;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+        }
+        .bubble {
+            padding: 10px;
+            margin: 8px 0;
+            border-radius: 8px;
+            max-width: 80%;
+        }
+        .bubble.cliente {
+            background: #eee;
+            align-self: flex-start;
+        }
+        .bubble.vendedor {
+            background: #b60000;
+            color: white;
+            align-self: flex-end;
+        }
+        .input-container {
+            display: flex;
+            max-width: 800px;
+            margin: 0 auto 20px auto;
+        }
+        input {
+            flex: 1;
+            padding: 10px;
+            border-radius: 4px;
+            border: 1px solid #ccc;
+        }
+        button {
+            padding: 10px 20px;
+            margin-left: 10px;
+            border: none;
+            border-radius: 4px;
+            background: #28a745;
+            color: white;
+            font-weight: bold;
+            cursor: pointer;
+        }
+        button.finalizar {
+            background: #ffc107;
+            color: black;
+        }
+        .messages {
+            display: flex;
+            flex-direction: column;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <span class="mode-label" id="mode-label"></span>
+        <span id="user-email"></span>
+    </header>
 
-<header>CrestaTrainer • Demo</header>
-
-<div id="wrap">
-  <div id="top">
-    <div id="who">
-      <span class="badge mode" id="modeBadge">Modo: FÁCIL</span>
-      <span class="email" id="emailSpan"></span>
+    <div class="chat">
+        <div class="messages" id="messages"></div>
     </div>
-    <div id="timer">10:00</div>
-  </div>
 
-  <div id="chat"></div>
+    <div class="input-container">
+        <input type="text" id="input" placeholder="Escribe tu respuesta..." />
+        <button id="send">Enviar</button>
+        <button class="finalizar" id="finalizar">Finalizar</button>
+    </div>
 
-  <div id="bar">
-    <textarea id="input" rows="2" placeholder="Escribe tu respuesta..."></textarea>
-    <button id="send">Enviar</button>
-    <button id="finish" class="btn-warn">Finalizar</button>
-  </div>
+    <script>
+        let mode = "FÁCIL"; // Esto se puede cambiar dinámicamente si quieres
+        let email = "ruben.perrone@crestanevada.es";
+        let startTime = Date.now();
 
-  <div id="result"></div>
-</div>
+        document.getElementById("mode-label").textContent = `Modo: ${mode}`;
+        document.getElementById("user-email").textContent = email;
 
-<script>
-/* =================== Estado =================== */
-let history = [];         // para /api/simulate
-let transcript = [];      // log legible para /api/evaluate
-let chosenCar = null;     // coche del stock.txt
-let locked = false;       // bloquea UI tras finalizar
-let startedAt = Date.now();
-let deadline = startedAt + 10*60*1000; // 10 min
+        function escapeHtml(text) {
+            let div = document.createElement("div");
+            div.innerText = text;
+            return div.innerHTML;
+        }
 
-// nivel (mostrar, no seleccionar)
-const LEVEL = 'FÁCIL'; // ← si quieres cambiar más adelante, solo cambia este string
+        function bubble(sender, text) {
+            const msgContainer = document.getElementById("messages");
+            const div = document.createElement("div");
+            div.classList.add("bubble", sender);
+            div.innerHTML = escapeHtml(text || "");
+            msgContainer.appendChild(div);
+            msgContainer.scrollTop = msgContainer.scrollHeight;
+        }
 
-// email (pedir una vez y guardar)
-let userEmail = localStorage.getItem('ct_email') || "";
-if (!userEmail) {
-  userEmail = prompt("Introduce tu email corporativo para comenzar:")?.trim() || "sin-email@empresa.com";
-  localStorage.setItem('ct_email', userEmail);
-}
-document.getElementById('emailSpan').textContent = userEmail;
-document.getElementById('modeBadge').textContent = `Modo: ${LEVEL}`;
+        async function startSimulation() {
+            const res = await fetch("/api/simulate");
+            const data = await res.json();
+            const first = typeof data?.first === 'string' ? data.first : "";
+            bubble("cliente", first);
+        }
 
-// temporizador
-function tick(){
-  const s = Math.max(0, Math.floor((deadline-Date.now())/1000));
-  const mm = String(Math.floor(s/60)).padStart(2,'0');
-  const ss = String(s%60).padStart(2,'0');
-  document.getElementById('timer').textContent = `${mm}:${ss}`;
-  if(s<=0 && !locked) finish();
-}
-setInterval(tick, 500);
+        async function sendMessage() {
+            const input = document.getElementById("input");
+            const text = input.value.trim();
+            if (!text) return;
 
-// utilidades (sanear)
-function escapeHtml(s){
-  return String(s)
-    .replace(/&/g,"&amp;")
-    .replace(/</g,"&lt;")
-    .replace(/>/g,"&gt;")
-    .replace(/"/g,"&quot;")
-    .replace(/'/g,"&#39;");
-}
+            bubble("vendedor", text);
+            input.value = "";
 
-// pintar una burbuja
-function bubble(role, text){
-  const div = document.createElement('div');
-  div.className = 'b ' + (role==="cliente" ? "cli" : "ven");
-  // cliente permite pocas cosas (texto saneado)
-  div.innerHTML = escapeHtml(text);
-  document.getElementById('chat').appendChild(div);
-  document.getElementById('chat').scrollTop = document.getElementById('chat').scrollHeight;
+            const res = await fetch("/api/evaluate", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ message: text })
+            });
 
-  // guardar en historiales para la IA y para evaluación
-  transcript.push({ speaker: role, text });
-  if (role === "vendedor") history.push({ role: "user", content: text });
-  else history.push({ role: "assistant", content: text });
-}
+            const data = await res.json();
+            const reply = typeof data?.reply === 'string' ? data.reply : "";
+            bubble("cliente", reply);
+        }
 
-/* =============== Cargar stock y primer mensaje =============== */
-async function loadRandomCar(){
-  try {
-    const r = await fetch('/stock.txt', { cache: 'no-store' });
-    if(!r.ok) throw new Error('No se pudo leer stock.txt');
-    const txt = await r.text();
+        async function finalizar() {
+            let tiempoTotal = ((Date.now() - startTime) / 1000).toFixed(1) + " segundos";
+            const res = await fetch("/api/finish", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ duracion: tiempoTotal })
+            });
+            const result = await res.json();
+            alert(`Simulación finalizada.\nTiempo total: ${tiempoTotal}\nNota: ${result.nota_total || 0}`);
+        }
 
-    const lines = txt.split('\n').map(l=>l.trim()).filter(Boolean);
-    if (lines.length === 0) throw new Error('Stock vacío');
+        document.getElementById("send").addEventListener("click", sendMessage);
+        document.getElementById("finalizar").addEventListener("click", finalizar);
 
-    const pick = lines[Math.floor(Math.random()*lines.length)];
-    const cols = pick.split('|').map(x => (x ?? '').trim());
-
-    const title   = cols[0] || '';  // p.ej. "BMW Serie 1 118d 2019"
-    const price   = cols[1] || '';  // "18.500€"
-    const monthly = cols[2] || '';  // "289€/mes"
-
-    chosenCar = { title, price, monthly };
-
-    // construir el primer mensaje sin backticks anidados
-    const parts = [];
-    if (title)   parts.push(title);
-    const priceLine = [price, monthly].filter(Boolean).join(' • ');
-    if (priceLine) parts.push(priceLine);
-
-    const first =
-      "Hola, estaba mirando este coche:\n" +
-      parts.join('\n') +
-      "\n¿Podrías confirmarme si está disponible para verlo esta semana?";
-
-    bubble("cliente", first);
-
-  } catch(e){
-    console.warn('Fallo al obtener stock:', e?.message || e);
-    chosenCar = { title: "SUV gasolina", price: "", monthly: "" };
-    bubble("cliente", "Hola, vi un SUV en vuestra web y me gustaría saber si lo puedo ver en esta tienda o traerlo para probarlo.");
-  }
-}
-
-/* ================== Simular (IA cliente) ================== */
-async function simulate(){
-  try{
-    const r = await fetch('/api/simulate', {
-      method:'POST',
-      headers:{ 'Content-Type':'application/json' },
-      body: JSON.stringify({
-        history,
-        car: chosenCar,
-        nivel: LEVEL,
-        email: userEmail
-      })
-    });
-    const data = await r.json();
-
-    // Asegura que solo mostramos el texto del cliente
-    const reply = typeof data?.reply === 'string' ? data.reply : "";
-    bubble("cliente", reply || "¿Podrías repetirme? No he recibido respuesta.");
-  }catch(err){
-    console.error(err);
-    bubble("cliente", "Tengo problemas de conexión ahora mismo, ¿puedes repetir?");
-  }
-}
-
-/* ================== Finalizar y Evaluar ================== */
-async function finish(){
-  if (locked) return;
-  locked = true;
-  document.getElementById('send').disabled = true;
-  document.getElementById('finish').disabled = true;
-
-  const durationSec = Math.max(1, Math.round((Date.now() - startedAt)/1000));
-
-  try{
-    const r = await fetch('/api/evaluate', {
-      method:'POST',
-      headers:{ 'Content-Type':'application/json' },
-      body: JSON.stringify({
-        transcript,
-        car: chosenCar,
-        nivel: LEVEL,
-        email: userEmail,
-        startedAt,
-        durationSec
-      })
-    });
-
-    // La API puede devolver JSON o texto. Si es JSON lo formateamos bonito.
-    const text = await r.text();
-    let pretty = text;
-    try{
-      const j = JSON.parse(text);
-      pretty = JSON.stringify(j, null, 2);
-    }catch(_){} // si no es JSON, lo dejamos tal cual
-
-    const pre = document.createElement('pre');
-    pre.textContent = pretty;
-    document.getElementById('result').appendChild(pre);
-  }catch(err){
-    const pre = document.createElement('pre');
-    pre.textContent = "Error al evaluar: " + (err?.message || err);
-    document.getElementById('result').appendChild(pre);
-  }
-}
-
-/* ================== UI ================== */
-document.getElementById('send').onclick = async ()=>{
-  const v = document.getElementById('input').value.trim();
-  if(!v) return;
-  document.getElementById('input').value = "";
-  bubble("vendedor", v);
-  await simulate();
-};
-document.getElementById('finish').onclick = finish;
-
-/* ================== Arranque ================== */
-loadRandomCar();
-</script>
+        startSimulation();
+    </script>
+</body>
+</html>
