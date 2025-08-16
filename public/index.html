@@ -1,194 +1,276 @@
-<!DOCTYPE html>
-<html lang="es">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>CrestaTrainer • Demo</title>
-  <style>
-    :root{
-      --brand:#cc0000; --green:#2ecc71; --amber:#ffab00;
-      --bg:#f5f5f5; --panel:#fff; --soft:#f3f3f3; --border:#e6e6e6;
+<!doctype html>
+<meta charset="utf-8" />
+<title>CrestaTrainer • Demo</title>
+<style>
+  :root{
+    --brand:#cc0000;
+    --ok:#2ecc71;
+    --bg:#f5f5f5;
+    --card:#ffffff;
+    --chat-bg:#fafafa;
+    --border:#e0e0e0;
+    --text:#212121;
+  }
+  html,body{height:100%}
+  body{
+    font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+    margin:0; background:var(--bg); color:var(--text);
+    display:flex; flex-direction:column;
+  }
+  header{
+    background:var(--brand); color:#fff; padding:10px 14px; font-weight:700;
+    display:flex; align-items:center; gap:12px;
+  }
+  .pill{background:#00000022; padding:4px 8px; border-radius:999px; font-size:12px}
+  #wrap{max-width:980px; width:100%; margin:16px auto; background:var(--card); border-radius:12px; padding:16px;
+        box-shadow:0 10px 20px rgba(0,0,0,.06); flex:1; display:flex; flex-direction:column}
+  #top{display:flex; justify-content:space-between; align-items:center; margin-bottom:10px}
+  #timer{font-weight:800}
+  #chat{border:1px solid var(--border); border-radius:10px; padding:12px; height:56vh; overflow:auto; background:var(--chat-bg)}
+  .b{margin:8px 0; padding:10px 12px; border-radius:10px; max-width:74%; white-space:pre-wrap; line-height:1.35}
+  .cli{background:#eee; color:#111}
+  .ven{background:var(--brand); color:#fff; margin-left:auto}
+  #bar{display:flex; gap:8px; margin-top:12px}
+  #input{flex:1; padding:12px; border-radius:8px; border:1px solid #ddd}
+  button{background:var(--ok); color:#fff; border:0; border-radius:8px; padding:10px 16px; font-weight:700; cursor:pointer}
+  button.warn{background:#f4b400; color:#222}
+  pre{background:#111; color:#0f0; padding:12px; border-radius:8px; overflow:auto}
+  #meta{font-size:12px; opacity:.85}
+</style>
+
+<header>
+  <span class="pill" id="modeBadge">Modo: FÁCIL</span>
+  <span id="userEmail">–</span>
+</header>
+
+<div id="wrap">
+  <div id="top">
+    <div id="meta"></div>
+    <div id="timer">10:00</div>
+  </div>
+
+  <div id="chat"></div>
+
+  <div id="bar">
+    <textarea id="input" rows="2" placeholder="Escribe tu respuesta..."></textarea>
+    <button id="send">Enviar</button>
+    <button id="finish" class="warn">Finalizar</button>
+  </div>
+
+  <div id="result"></div>
+</div>
+
+<script>
+/* ==========================
+   CONFIG
+========================== */
+const SESSION_MINUTES = 10;                 // Duración de la simulación
+const START_MODE = "FÁCIL";                  // Sólo mostramos (no se elige)
+const CLIENT_NAME_POOL = ["Laura","Carlos","Marta","Diego","Ana","Javier","Elena","Sergio"];
+const ALLORIGINS_LIST_URL = (page=1)=>`https://api.allorigins.win/raw?url=${encodeURIComponent('https://www.crestanevada.es/coches-segunda-mano/?_paged='+page)}`;
+
+/* ==========================
+   ESTADO
+========================== */
+let history = [];       // Para la IA (roles user/assistant)
+let transcript = [];    // Log visible de chat
+let chosenCar = null;   // {title, price, monthly, url}
+let locked = false;
+
+let startTs = Date.now();
+let deadline = startTs + SESSION_MINUTES*60*1000;
+let vendedorEmail = "";       // se pide al cargar
+let clientName = CLIENT_NAME_POOL[Math.floor(Math.random()*CLIENT_NAME_POOL.length)];
+
+/* ==========================
+   UTILS
+========================== */
+function fmtTimeLeft(ms){
+  const s = Math.max(0, Math.floor(ms/1000));
+  const mm = String(Math.floor(s/60)).padStart(2,'0');
+  const ss = String(s%60).padStart(2,'0');
+  return `${mm}:${ss}`;
+}
+function escapeHtml(s){
+  return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")
+          .replace(/"/g,"&quot;").replace(/'/g,"&#39;");
+}
+function linkifySafe(s){
+  // ahora sin enlaces clicables (lo pediste así), pero dejamos función por si vuelves a quererlo
+  return escapeHtml(s);
+}
+function bubble(role, text){
+  const div = document.createElement('div');
+  div.className = 'b ' + (role==="cliente" ? "cli" : "ven");
+  if(role==="cliente") { div.innerHTML = linkifySafe(text); history.push({role:"assistant", content:text}); }
+  else { div.textContent = text; history.push({role:"user", content:text}); }
+  document.getElementById('chat').appendChild(div);
+  const chat = document.getElementById('chat');
+  chat.scrollTop = chat.scrollHeight;
+  transcript.push({ speaker: role, text, ts: Date.now() });
+}
+
+/* ==========================
+   TEMPORIZADOR VISIBLE
+========================== */
+function tick(){
+  const left = deadline - Date.now();
+  document.getElementById('timer').textContent = fmtTimeLeft(left);
+  if(left<=0 && !locked){ finish(); }
+}
+setInterval(tick, 500);
+
+/* ==========================
+   STOCK: Obtener coche aleatorio
+   1) Intento: scrapping de la web (AllOrigins)
+   2) Fallback: /stock.txt
+   3) Fallback final: texto genérico
+========================== */
+async function pickCarFromWebsite(){
+  // probamos 3 páginas aleatorias para variedad
+  const page = 1 + Math.floor(Math.random()*3);
+  const r = await fetch(ALLORIGINS_LIST_URL(page), { cache:'no-store' });
+  if(!r.ok) throw new Error('Listado web no accesible');
+  const html = await r.text();
+
+  // Buscar urls de coches y títulos basándonos en los enlaces del listado
+  // Capturamos href + texto cercano (rudimentario pero suficiente)
+  const linkRe = /href="(https:\/\/www\.crestanevada\.es\/coches-segunda-mano\/[^"]+)"[^>]*>([^<]+)<\/a>/gi;
+  let m, items = [];
+  while((m = linkRe.exec(html))!==null){
+    const url = m[1];
+    let title = m[2].replace(/\s+/g,' ').trim();
+    // Filtrar ruido
+    if(title.length < 6) continue;
+    // Buscar un precio cercano (en la misma card suele aparecer)
+    // Precio típico “13.990€” (con punto como separador de miles)
+    const slice = html.slice(Math.max(0, m.index-400), m.index+400);
+    const priceM = slice.match(/(\d{1,3}(\.\d{3})+|\d{4,6})\s*€/);
+    const price = priceM ? priceM[0] : '';
+    // Cuota mensual si aparece
+    const monthlyM = slice.match(/(\d{1,3}(\.\d{3})*|\d{2,4}(,\d{2})?)\s*€\s*\/\s*mes/i);
+    const monthly = monthlyM ? monthlyM[0] : '';
+    items.push({ title, price, monthly, url });
+  }
+  if(items.length===0) throw new Error('No se detectaron coches en el HTML');
+  return items[Math.floor(Math.random()*items.length)];
+}
+
+async function pickCarFromLocal(){
+  const r = await fetch('/stock.txt', { cache:'no-store' });
+  if(!r.ok) throw new Error('No existe stock.txt');
+  const txt = await r.text();
+  const lines = txt.split('\n').map(l=>l.trim()).filter(Boolean);
+  if(!lines.length) throw new Error('stock.txt vacío');
+  const raw = lines[Math.floor(Math.random()*lines.length)];
+  const [title="", price="", monthly="", url=""] = raw.split('|').map(x=>(x||"").trim());
+  return { title, price, monthly, url };
+}
+
+async function loadRandomCarAndGreet(){
+  try{
+    chosenCar = await pickCarFromWebsite();
+  }catch(_){
+    try{
+      chosenCar = await pickCarFromLocal();
+    }catch(_e){
+      chosenCar = { title:"un SUV gasolina que vi en vuestra web", price:"", monthly:"", url:"" };
     }
-    *{box-sizing:border-box}
-    html,body{height:100%}
-    body{margin:0;background:var(--bg);color:#222;font:16px/1.4 system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;display:flex;flex-direction:column}
-    header{background:var(--brand);color:#fff;padding:10px 16px;display:flex;align-items:center;gap:12px}
-    .badge{background:#000;color:#fff;font-weight:700;border-radius:999px;padding:4px 10px;font-size:12px}
-    .user{font-weight:600;opacity:.95;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-    #wrap{width:min(980px,100%);margin:16px auto;padding:0 12px;flex:1;display:flex;flex-direction:column;gap:12px}
-    #card{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:14px;box-shadow:0 6px 14px rgba(0,0,0,.06);display:flex;flex-direction:column;gap:12px;min-height:360px}
-    #chat{background:var(--soft);border:1px solid var(--border);border-radius:10px;padding:12px;height:360px;overflow:auto}
-    .b{margin:8px 0;padding:10px 12px;border-radius:10px;max-width:75%;white-space:pre-wrap}
-    .cli{background:#eee;color:#212121}
-    .ven{background:var(--brand);color:#fff;margin-left:auto}
-    #bar{display:flex;gap:8px}
-    #input{flex:1;padding:10px;border-radius:8px;border:1px solid var(--border);background:#fff}
-    button{border:0;border-radius:8px;padding:10px 16px;font-weight:700;cursor:pointer}
-    .ok{background:var(--green);color:#fff}
-    .end{background:var(--amber);color:#fff}
-    #result pre{margin:0;background:#111;color:#0f0;padding:12px;border-radius:8px;overflow:auto}
-  </style>
-</head>
-<body>
-  <header>
-    <span class="badge" id="mode-badge">Modo: FÁCIL</span>
-    <div class="user" id="user-mail">—</div>
-  </header>
+  }
 
-  <main id="wrap">
-    <div id="card">
-      <div id="chat"></div>
-      <div id="bar">
-        <input id="input" placeholder="Escribe tu respuesta…" />
-        <button class="ok" id="send">Enviar</button>
-        <button class="end" id="finish">Finalizar</button>
-      </div>
-      <div id="result"></div>
-    </div>
-  </main>
+  const parts = [];
+  if(chosenCar.title) parts.push(chosenCar.title);
+  if(chosenCar.price || chosenCar.monthly){
+    const p = [chosenCar.price, chosenCar.monthly].filter(Boolean).join(' · ');
+    parts.push(p);
+  }
+  const head = parts.length ? `'${parts.join(', ')}',` : "";
+  const firstMsg =
+`Hola, estaba mirando este coche:
+${head}
+¿Podrías confirmarme si está disponible para verlo esta semana?`;
 
-  <script>
-    // ===== Estado y cabecera =====
-    const MODE = 'FÁCIL';
-    document.getElementById('mode-badge').textContent = 'Modo: ' + MODE;
+  bubble("cliente", firstMsg);
+}
 
-    let history = [];
-    let transcript = [];
-    let chosenCar = null;
+/* ==========================
+   IA: simular turno de cliente
+========================== */
+async function simulateTurn(){
+  const body = {
+    history,
+    car: chosenCar,
+    nivel: START_MODE,
+    vendedorEmail,
+    clientName
+  };
+  const r = await fetch('/api/simulate',{
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify(body)
+  });
+  const data = await r.json();
+  // fallback corto si algo viniera vacío
+  bubble("cliente", data.reply || "¿Podrías repetirme? No me ha quedado claro.");
+}
 
-    (function ensureEmail(){
-      let m = localStorage.getItem('trainerEmail') || '';
-      if(!m){
-        m = prompt('Introduce tu email corporativo para registrar este role-play:', '') || '';
-        if(m) localStorage.setItem('trainerEmail', m);
-      }
-      document.getElementById('user-mail').textContent = m || '—';
-    })();
+/* ==========================
+   Finalizar + Evaluar
+========================== */
+async function finish(){
+  locked = true;
+  document.getElementById('send').disabled = true;
+  document.getElementById('finish').disabled = true;
 
-    // ===== UI =====
-    function bubble(role, text){
-      const div = document.createElement('div');
-      div.className = 'b ' + (role === 'cliente' ? 'cli' : 'ven');
-      div.textContent = text;
-      document.getElementById('chat').appendChild(div);
-      document.getElementById('chat').scrollTop = document.getElementById('chat').scrollHeight;
-      transcript.push({ speaker: role, text });
-      history.push({ role: role === 'vendedor' ? 'user' : 'assistant', content: text });
-    }
+  const durationMs = Date.now() - startTs;
 
-    // ===== Carga de stock robusta =====
-    async function loadRandomCar(){
-      const fallback = [
-        'BMW Serie 1 118d 2019|18.500€|289€/mes',
-        'SEAT León 1.5 TSI 2020|17.900€|265€/mes',
-        'Volkswagen Golf 1.0 TSI 2021|19.300€|299€/mes',
-        'Audi A3 30 TDI 2019|20.400€|315€/mes',
-        'Nissan Qashqai 1.3 DIG-T 2020|21.200€|329€/mes',
-        'KIA Sportage 1.6 GDi 2018|15.800€|239€/mes'
-      ];
+  const r = await fetch('/api/evaluate',{
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({
+      transcript,
+      car: chosenCar,
+      vendedorEmail,
+      nivel: START_MODE,
+      durationMs
+    })
+  });
+  const data = await r.text();
+  const pre = document.createElement('pre');
+  pre.textContent = data;
+  document.getElementById('result').appendChild(pre);
+}
 
-      function looksLikeCarLine(rawLine){
-        // Fuera comentarios y basura (/* */, //), CSS/JS/HTML y enlaces
-        if(!rawLine) return false;
-        if(/^\s*\/\*/.test(rawLine)) return false;
-        if(/^\s*\/\//.test(rawLine)) return false;
-        if(/\/\*/.test(rawLine) || /\*\//.test(rawLine)) return false;
-        if(/[{}<>]|<\/?|\bfunction\b|\bconst\b|https?:\/\//i.test(rawLine)) return false;
+/* ==========================
+   UI INIT
+========================== */
+async function init(){
+  // pedir email (solo si no lo tenemos en localStorage)
+  vendedorEmail = localStorage.getItem('ct_email') || "";
+  while(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(vendedorEmail)){
+    vendedorEmail = prompt("Introduce tu email corporativo para empezar:") || "";
+  }
+  localStorage.setItem('ct_email', vendedorEmail);
 
-        const cols = rawLine.split('|').map(x => (x||'').trim());
-        if(cols.length < 1 || cols.length > 3) return false;
+  // pintar cabecera
+  document.getElementById('modeBadge').textContent = `Modo: ${START_MODE}`;
+  document.getElementById('userEmail').textContent = vendedorEmail;
+  document.getElementById('meta').textContent = `Cliente: ${clientName}`;
 
-        // La primera columna debe tener letras y, preferible, un año de 4 dígitos
-        const title = cols[0];
-        if(!/[A-Za-zÁÉÍÓÚÜÑáéíóúüñ]/.test(title)) return false;
-        if(!/\b(19|20)\d{2}\b/.test(title)) return false;
+  // primer mensaje (coche aleatorio)
+  await loadRandomCarAndGreet();
+}
 
-        return true;
-      }
+// eventos
+document.getElementById('send').onclick = async ()=>{
+  const v = document.getElementById('input').value.trim();
+  if(!v || locked) return;
+  document.getElementById('input').value = "";
+  bubble("vendedor", v);
+  await simulateTurn();
+};
+document.getElementById('finish').onclick = finish;
 
-      try{
-        const r = await fetch('/stock.txt', { cache:'no-store' });
-        let lines = [];
-        if(r.ok){
-          const txt = await r.text();
-          lines = txt.split('\n').map(s => s.trim()).filter(looksLikeCarLine);
-        }
-        if(!lines.length) lines = fallback;
-
-        const pick = lines[Math.floor(Math.random()*lines.length)];
-        const [title='', price='', monthly=''] = pick.split('|').map(x => (x||'').trim());
-
-        chosenCar = { title, price, monthly };
-
-        const msgParts = ['Hola, estaba mirando este coche:'];
-        if(title) msgParts.push(title);
-        if(price || monthly) msgParts.push([price, monthly].filter(Boolean).join(' • '));
-        msgParts.push('¿Podrías confirmarme si está disponible para verlo esta semana?');
-        bubble('cliente', msgParts.join('\n'));
-
-      }catch(e){
-        console.warn('Stock falló:', e);
-        chosenCar = { title:'SUV gasolina', price:'', monthly:'' };
-        bubble('cliente','Hola, estaba mirando un SUV gasolina que vi en vuestra web. ¿Podrías confirmarme si está disponible para verlo esta semana?');
-      }
-    }
-
-    // ===== Simulación backend =====
-    async function simulate(){
-      try{
-        const r = await fetch('/api/simulate', {
-          method:'POST',
-          headers:{ 'Content-Type':'application/json' },
-          body: JSON.stringify({ history, car: chosenCar, nivel: MODE })
-        });
-        const data = await r.json().catch(()=>({}));
-        bubble('cliente', (data && data.reply) ? data.reply : '¿Podrías repetirme?');
-      }catch(e){
-        bubble('cliente','(hubo un problema temporal, intenta otra vez)');
-      }
-    }
-
-    // ===== Evaluación backend =====
-    async function finish(){
-      try{
-        if(!window.__startTs) window.__startTs = Date.now();
-        const durationSec = Math.max(1, Math.floor((Date.now() - window.__startTs)/1000));
-        const r = await fetch('/api/evaluate', {
-          method:'POST',
-          headers:{ 'Content-Type':'application/json' },
-          body: JSON.stringify({
-            transcript, car: chosenCar, mode: MODE,
-            email: localStorage.getItem('trainerEmail') || '',
-            duration_sec: durationSec
-          })
-        });
-        const data = await r.text();
-        const pre = document.createElement('pre');
-        pre.textContent = data;
-        document.getElementById('result').innerHTML = '';
-        document.getElementById('result').appendChild(pre);
-      }catch(e){
-        const pre = document.createElement('pre');
-        pre.textContent = 'Error al evaluar: ' + (e?.message || e);
-        document.getElementById('result').innerHTML = '';
-        document.getElementById('result').appendChild(pre);
-      }
-    }
-
-    // ===== Eventos =====
-    document.getElementById('send').onclick = async ()=>{
-      const el = document.getElementById('input');
-      const v = el.value.trim();
-      if(!v) return;
-      el.value = '';
-      bubble('vendedor', v);
-      await simulate();
-    };
-    document.getElementById('finish').onclick = finish;
-
-    // Arranque
-    window.__startTs = Date.now();
-    loadRandomCar();
-  </script>
-</body>
-</html>
+// arrancar
+init();
+</script>
